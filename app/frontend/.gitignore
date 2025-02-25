@@ -1,0 +1,72 @@
+# Node Modules
+node_modules/
+
+# Build Output
+dist/
+build/
+out/
+
+# Dependency directories
+jspm_packages/
+web_modules/
+
+# TypeScript-specific
+*.tsbuildinfo
+
+# IDE and Editor Stuff
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.log
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Coverage reports
+coverage/
+lcov-report/
+
+# Bundler artifacts
+*.js.map
+*.css.map
+
+# Personal configuration files (might be in global .gitignore)
+.user
+
+# package lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Temporary files
+tmp/
+temp/
+
+# OS generated files
+ehthumbs.db
+[Dd]esktop.ini
+
+# Archives and compressed files - often generated, rarely needed in repo
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+
+# Vercel and Netlify specific files
+.vercel/
+.next/
+.netlify/
+
+# storybook static files
+storybook-static/

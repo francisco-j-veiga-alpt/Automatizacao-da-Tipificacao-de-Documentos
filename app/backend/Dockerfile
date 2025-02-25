@@ -1,9 +1,9 @@
 FROM python:3.12-slim
 
-WORKDIR /app/src
+WORKDIR /app/backend/src
 
-COPY ./src /app/src
-COPY requirements.txt /app/src
+COPY ./src /app/backend/src
+COPY requirements.txt /app/backend/src
 
 ######
 RUN pip config set global.proxy gateway.pt.zscaler.net:80
@@ -14,4 +14,4 @@ RUN pip install -r requirements.txt
 
 EXPOSE 80
 
-CMD ["fastapi", "run", "/app/src/main.py", "--reload", "--port", "80"]
+CMD ["fastapi", "run", "/app/backend/src/main.py", "--reload", "--host", "0.0.0.0", "--port", "80"]

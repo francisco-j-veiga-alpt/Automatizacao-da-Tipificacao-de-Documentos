@@ -1,2 +1,9 @@
 fastapi[standard]>=0.113.0,<0.114.0
-pydantic>=2.7.0,<3.0.0
+pydantic==2.10.6
+pymongo==4.11.1
+beautifulsoup4==4.13.3
+requests==2.32.3
+langchain==0.3.19
+langchain-ollama==0.2.3
+langchain-google-genai==2.0.9
+python-dateutil==2.9.0.post0
