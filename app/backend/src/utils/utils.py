@@ -1,5 +1,6 @@
 from dateutil.relativedelta import relativedelta
 from datetime import date, datetime, time
+import docx
 
 def string_to_date(date_string):
     """
@@ -72,3 +73,22 @@ def subtract_n_months_and_get_first_day(num_of_months=2):
         e.add_note("Error subtract n months and get first_day!")
         raise
 
+
+
+def read_docx(file_path):
+    try:
+        doc = docx.Document(file_path)
+        full_text = []
+        for paragraph in doc.paragraphs:
+            full_text.append(paragraph.text)
+        return '\n'.join(full_text)
+
+    except FileNotFoundError:
+        add_note(f"Error: File not found at {file_path}")
+        raise
+    except docx.opc.exceptions.PackageNotFoundError:
+        add_note(f"Error: Invalid .docx file at {file_path}")
+        raise
+    except Exception as e:
+        e.add_note(f"An unexpected error occurred: {e}")
+        raise

@@ -75,24 +75,35 @@ class CollectionPortalDaQuixa(FeedbackPortalDaQuiexa, FeedbackClassificationPort
 class ListCollectionPortalDaQuixa(RootModel[List[CollectionPortalDaQuixa]]):
     root: List[CollectionPortalDaQuixa]
 
-class RelatorioMensal(BaseModel):
-    mes: str = Field(..., description="Nome do Mês")
-    ano: int = Field(..., description="Ano")
-    resumo: str = Field(..., description="Visão geral concisa dos principais problemas")
-    acoes_sugeridas: List[str] = Field(..., description="Lista de ações sugeridas")
-    
+
+class AnaliseItem(BaseModel):
+    tema: str = Field(..., description="Principal tema do feedback")
+    descricao: str = Field(..., description="Descrição das principais intenções deste tema")
+    percentagem: float = Field(..., description="Valor total percentual de feedbacks que se inserem neste tema.")
 
 
-def connect_to_collection(conn_str, db_name, collection_name):
+class MonthlyReport(BaseModel):
+    analise: List[AnaliseItem] = Field(..., description="Lista de temas de análise")
+    sugestoes_de_melhoria_dos_clientes: List[str] = Field(..., description="Lista de sugestões de melhoria dos clientes")
+    propostas_de_melhoria_AI: List[str] = Field(..., description="Lista de propostas de melhoria")
+
+
+class InputReport(BaseModel):
+    year: int
+    month: int
+    delete_report: bool = False
+
+
+def connect_to_collection(conn_str, db_name, collection_name, create_collection=False):
     try:
         client = MongoClient(conn_str)
         db = client[db_name]
 
-        if collection_name not in db.list_collection_names():
+        if not collection_name in db.list_collection_names() and not create_collection:
             raise ValueError(f"Collection '{collection_name}' does not exist.")
 
         collection = db[collection_name]
-        return collection, client
+        return db, collection, client
     except Exception as e:
         e.add_note(f"MongoDB connection error: {e}")
         raise
@@ -106,7 +117,7 @@ def insert_data(collection, feed: List[Dict] | Dict):
         else:
             result = collection.insert_one(feed)
             return str(result.inserted_id)
-    except e:
+    except Exception as e:
         e.add_note(f"Error inserting data: {e}")
         raise
 
@@ -132,7 +143,7 @@ def delete_data_between_dates(collection, start_date, end_date, date_field):
         raise
 
 
-def get_data_by_year_month(collection, year, month):
+def get_data_by_year_month(collection, year, month, date_field, project):
     try:
         today = date.today()
         if year > today.year:
@@ -151,40 +162,81 @@ def get_data_by_year_month(collection, year, month):
         pipeline = [
             {
                 '$match': {
-                    'data': {
+                    date_field: {
                         '$gte': start_date,
                         '$lt': end_date
                     }
                 }
             },
             {
-                '$sort': {'data': 1}
-            },
-            {
-                '$project': {
-                    '_id': 0,
-                    'area_de_feedback': 1,
-                    'classificacao': 1,
-                    'assunto': 1,
-                    'sentimento': 1,
-                    'resumo': 1,
-                    'urgente': 1
-                }
-            }
+                '$sort': {date_field: 1}
+            }, project
         ]
 
-        return {
-            "mes": month,
-            "ano": year,
-            "feedbacks": list(collection.aggregate(pipeline))
-        }
+        return list(collection.aggregate(pipeline))[0]
     except Exception as e:
         e.add_note(f"Get monthly feedback error: {e}")
         raise
 
 
+def get_max_timestamp(collection, field):
+    try:
+        ts = collection.aggregate([
+
+            {
+                "$group": {
+                    "_id": None,
+                    "maxTimestamp": { "$max": f"${field}" }
+                }
+            }
+        ]).next()["maxTimestamp"]
+        return str(ts)
+    except Exception as e:
+        e.add_note(f"Error get timestamp: {e}")
+        raise
 
 
+def get_collection_unique_timestamps(collection, date_field_name="data", format_string="%Y-%m"):
+    try:
+        pipeline = [
+            {
+            "$group": {
+                "_id": {
+                "$dateToString": {
+                    "format": format_string,
+                    "date": "$data"
+                }
+                }
+            }
+            },
+            { 
+            "$sort": { 
+                "_id": 1 
+            } 
+            },
+            {
+            "$group": {
+                "_id": None,
+                "dates": {
+                "$push": "$_id"
+                }
+            }
+            },
+            {
+            "$project": {
+                "_id": 0,
+                "dates": 1
+            }
+            }
+        ]
 
+        results = collection.aggregate(pipeline)
+        result = next(results, None)
+        if result:
+            return result["dates"]
+        else:
+            return []  # Return an empty list if no results
 
-
+    except Exception as e:
+        e.add_note(f"An error occurred coll unique timestamps!: {e}")
+        raise

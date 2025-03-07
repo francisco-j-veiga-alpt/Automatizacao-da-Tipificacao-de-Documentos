@@ -1,21 +1,18 @@
 import os
 import json
-from datetime import date
-from fastapi import FastAPI, APIRouter, HTTPException, status, Query
+from datetime import datetime, date
+from dateutil.relativedelta import relativedelta
+from fastapi import FastAPI, APIRouter, HTTPException, status, Query, Path
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from src.utils.utils import string_to_date, subtract_n_months_and_get_first_day
 from src.conn_utils.mongo_conn import InputPostPortalDaQuiexa, connect_to_collection, \
-    insert_data, ListCollectionPortalDaQuixa, delete_data_between_dates, get_data_by_year_month
+    insert_data, ListCollectionPortalDaQuixa, delete_data_between_dates, get_data_by_year_month, \
+        get_max_timestamp, InputReport, get_collection_unique_timestamps
 from src.utils.utils_portal_da_queixa import get_portal_da_queixa_feedback
 from src.llm_utils.models import feedback_classifier_portal_da_queixa, process_feedback_portal_da_queixa, \
-    feedback_report_portal_da_queixa, process_report_portal_da_queixa
-from src.conn_utils.queries_portal_da_queixa import sentiment_pipeline_filter_last_date_gte, \
-    total_negative_feedback_pipeline_filter_last_date_gte, \
-        total_negative_by_area_pipeline_filter_last_date_gte, \
-            total_negative_by_area_class_pipeline_filter_last_date_gte, \
-                total_negative_by_area_class_topic_pipeline_filter_last_date_gte, \
-                    total_urgente_pipeline_filter_last_date_gte
+    feedback_report, process_report
+from src.conn_utils.queries_portal_da_queixa import results_total_by_month_filter_last_date_gte
 
 
 db_host = os.environ.get("MONGO_HOST")
@@ -23,6 +20,9 @@ db_user = os.environ.get("MONGO_PRINCIPAL_USER")
 db_password = os.environ.get("MONGO_PRINCIPAL_PASSWORD")
 db_feedback = os.environ.get("MONGO_DB_CUSTOMER_FEEDBACK")
 db_collection_portal_da_queixa = os.environ.get("MONGO_COLLECTION_PORTAL_DA_QUEIXA")
+db_collection_portal_da_queixa_report = os.environ.get("MONGO_COLLECTION_PORTAL_DA_QUEIXA_REPORTS")
+db_collection_qualtrics_online = os.environ.get("MONGO_COLLECTION_QUALTRICS_ONLINE")
+db_collection_qualtrics_online_report = os.environ.get("MONGO_COLLECTION_QUALTRICS_ONLINE_REPORTS")
 
 uri_feedback = f"mongodb://{db_user}:{db_password}@{db_host}/{db_feedback}"
 
@@ -43,10 +43,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # --- App API ---
 @app.get("/")
 async def root():
     return {"message": "API is UP!"}
+
 
 # --- Feedback API ---
 feedback_router = APIRouter(prefix="/feedback", tags=["customer feedback"])
@@ -61,7 +63,7 @@ async def process_portal_da_queixa(params: InputPostPortalDaQuiexa):
     print(params)
 
     try:
-        collection, client = connect_to_collection(uri_feedback, db_feedback, db_collection_portal_da_queixa)
+        _, collection, client = connect_to_collection(uri_feedback, db_feedback, db_collection_portal_da_queixa)
 
         if params.delete_feedback:
             res_del = delete_data_between_dates(collection, params.last_date, params.to_date, "data")
@@ -100,54 +102,16 @@ async def summary_portal_da_queixa(
         if num_last_months < 1:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Number of months invalid.")
         
-        collection, client = connect_to_collection(uri_feedback, db_feedback, db_collection_portal_da_queixa)
+        _, collection, client = connect_to_collection(uri_feedback, db_feedback, db_collection_portal_da_queixa)
 
         date_to_filter = subtract_n_months_and_get_first_day(num_of_months=num_last_months)
 
-        total_sentiment = list(collection.aggregate(sentiment_pipeline_filter_last_date_gte(date_to_filter)))[0]
+        res_total = list(collection.aggregate(results_total_by_month_filter_last_date_gte(date_to_filter)))
 
-        if len(total_sentiment) < 1:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sentiment empty.")
+        if len(res_total) < 1:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="results total empty.")
         
-        total_neg_feed = list(collection.aggregate(total_negative_feedback_pipeline_filter_last_date_gte(date_to_filter)))[0]
-
-        if len(total_neg_feed) < 1:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Neg Feedback empty.")
-        
-        total_neg_feed_area = list(collection.aggregate(total_negative_by_area_pipeline_filter_last_date_gte(date_to_filter)))[0]
-
-        if len(total_neg_feed_area) < 1:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Neg Feedback by Area empty.")
-        
-        total_neg_feed_area_class = list(collection.aggregate(total_negative_by_area_class_pipeline_filter_last_date_gte(date_to_filter)))[0]
-
-        if len(total_neg_feed_area_class) < 1:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Neg Feedback by Area and class empty.")
-
-        total_neg_feed_area_class_topic = list(collection.aggregate(total_negative_by_area_class_topic_pipeline_filter_last_date_gte(date_to_filter)))[0]
-
-        if len(total_neg_feed_area_class_topic) < 1:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Neg Feedback by Area, class and topic empty.")
-        
-        total_urgent = list(collection.aggregate(total_urgente_pipeline_filter_last_date_gte(date_to_filter)))[0]
-
-        if len(total_urgent) < 1:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Total urgent feedback empty.")
-        
-        return {
-            "total_sentiment": total_sentiment["total_sentiment"],
-            "sentiment_by_month": total_sentiment["sentiment_by_month"],
-            "total_negative_feed_count": total_neg_feed["total_negative_count"][0]["count"],
-            "total_negative_feed_by_month": total_neg_feed["negative_by_month"],
-            "total_negative_feed_area_count": total_neg_feed_area["total_negative_by_area"],
-            "top10_negative_feed_area_by_month": total_neg_feed_area["top10_negative_by_month_area"],
-            "total_negative_feed_area_class_count": total_neg_feed_area_class["total_negative_by_area_class"],
-            "top10_negative_feed_area_class_by_month": total_neg_feed_area_class["top10_negative_by_month_area_class"],
-            "total_negative_feed_area_class_topic_count": total_neg_feed_area_class_topic["total_negative_by_area_class_topic"],
-            "top10_negative_feed_area_class_topic_by_month": total_neg_feed_area_class_topic["top10_negative_by_month_area_class_topic"],
-            "total_urgent_count": total_urgent["total_urgent_count"][0]["count"],
-            "total_urgent_count_by_month": total_urgent["urgent_by_month"]
-        }
+        return res_total
 
 
     except Exception as e:
@@ -158,10 +122,41 @@ async def summary_portal_da_queixa(
             client.close()
 
 
-@feedback_router.get("/portal-da-queixa/report", status_code=status.HTTP_201_CREATED)
-async def report_portal_da_queixa(
-    year: Optional[int] = Query(..., description="Report year."),
-    month: Optional[int] = Query(..., ge=1, le=12, description="Report month.")
+@feedback_router.get("/{source}/latest-timestamp", status_code=status.HTTP_200_OK)
+async def latest_timestamp(source: str = Path(..., title="Collection in mongodb")):
+    try:
+        _, collection, client = connect_to_collection(uri_feedback, db_feedback, source)
+
+        return get_max_timestamp(collection, "data")
+
+    except Exception as e:
+        e.add_note(f"Error get timestamp: {e}")
+        raise
+    finally:
+        if client:
+            client.close()
+
+
+@feedback_router.get("/{source}/list-timestamp", status_code=status.HTTP_200_OK)
+async def list_timestamp(source: str = Path(..., title="Collection in mongodb")):
+    try:
+        _, collection, client = connect_to_collection(uri_feedback, db_feedback, source)
+
+        return get_collection_unique_timestamps(collection)
+
+    except Exception as e:
+        e.add_note(f"Error list timestamp: {e}")
+        raise
+    finally:
+        if client:
+            client.close()
+
+
+@feedback_router.get("/{source}/report", status_code=status.HTTP_200_OK)
+async def feedback_report_api(
+    year: int = Query(2, description="Year of report."),
+    month: int = Query(2, description="Month of report."),
+    source: str = Path(..., title="Report collection in mongodb")
 ):
     try:
         today = date.today()
@@ -169,15 +164,14 @@ async def report_portal_da_queixa(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Year!")
         elif year == today.year and month > today.month:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Month!")
-        elif month < 1 and month > 12:
+        elif month < 1 or month > 12:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Month!")
         
-        collection, client = connect_to_collection(uri_feedback, db_feedback, db_collection_portal_da_queixa)
-        feed_month = get_data_by_year_month(collection, year, month)
-        chain = feedback_report_portal_da_queixa()
-        output = process_report_portal_da_queixa(chain, json.dumps(feed_month))
+        db, collection, client = connect_to_collection(uri_feedback, db_feedback, source + "_reports")
 
-        return output
+        report_month = get_data_by_year_month(collection, year, month, "data", {'$project': {'_id': 0}})
+
+        return report_month
 
     except Exception as e:
         e.add_note(f"Error portal da queixa report: {e}")
@@ -186,8 +180,57 @@ async def report_portal_da_queixa(
         if client:
             client.close()
 
+@feedback_router.post("/{source}/process-report", status_code=status.HTTP_201_CREATED)
+async def process_report_api(
+    request_data: InputReport,
+    source: str = Path(..., title="Feedbacks collection in mongodb")
+    ):
+    try:
+        today = date.today()
+        if request_data.year > today.year:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Year!")
+        elif request_data.year == today.year and request_data.month > today.month:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Month!")
+        elif request_data.month < 1 or request_data.month > 12:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Month!")
 
+        # create report
+        if source == db_collection_portal_da_queixa:
+            date_field = "data"
+            projection = {'$project': {'_id': 0, 'resumo': 1}}
+            report_collection = db_collection_portal_da_queixa_report
+        else:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid collection !")
 
+        db, collection, client = connect_to_collection(uri_feedback, db_feedback, source)
+        feed_month = get_data_by_year_month(collection=collection, date_field=date_field, month=request_data.month, year=request_data.year, project=projection)
+        chain = feedback_report()
+        output = process_report(chain, data_str=json.dumps(feed_month))
+
+        # # store report
+        report_collection = db[report_collection]
+        id_date = datetime(request_data.year, request_data.month, 1)
+
+        output = output.model_dump()
+        output.update({"data": id_date})
+
+        day_before = id_date - relativedelta(days=1)
+        day_after = id_date + relativedelta(days=1)
+
+        if request_data.delete_report:
+            res_del = delete_data_between_dates(report_collection, day_before, day_after, "data")
+            print("Deleted number of rows: ", res_del)
+
+        insert_result = insert_data(report_collection, output)
+
+        return {"inserted_id": "ok"}
+
+    except Exception as e:
+        e.add_note(f"Error api report: {e}")
+        raise
+    finally:
+        if client:
+            client.close()
 
 
 

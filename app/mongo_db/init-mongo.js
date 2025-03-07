@@ -1,5 +1,8 @@
 const dbName = process.env.MONGO_INITDB_DATABASE;
-const collectionName = process.env.MONGO_COLLECTION_PORTAL_DA_QUEIXA;
+const collection_pdq = process.env.MONGO_COLLECTION_PORTAL_DA_QUEIXA;
+const collection_pdq_report = process.env.MONGO_COLLECTION_PORTAL_DA_QUEIXA_REPORTS;
+const collection_qual_on = process.env.MONGO_COLLECTION_QUALTRICS_ONLINE;
+const collection_qual_on_report = process.env.MONGO_COLLECTION_QUALTRICS_ONLINE_REPORTS;
 const rootUsername = process.env.MONGO_INITDB_ROOT_USERNAME;
 const rootPassword = process.env.MONGO_INITDB_ROOT_PASSWORD;
 const newUserUsername = process.env.MONGO_PRINCIPAL_USER;
@@ -9,7 +12,13 @@ db = connect(`mongodb://${rootUsername}:${rootPassword}@localhost:27017/admin`);
 
 db = db.getSiblingDB(dbName); // Create or switch to the specified database
 
-db.createCollection(collectionName); // Create the specified collection
+db.createCollection(collection_pdq); // Create the specified collection
+
+db.createCollection(collection_pdq_report);
+
+db.createCollection(collection_qual_on);
+
+db.createCollection(collection_qual_on_report);
 
 // Create a new user with read and write permissions
 db.createUser({

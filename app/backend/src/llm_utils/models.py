@@ -4,7 +4,8 @@ from langchain_ollama import OllamaLLM
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 from langchain.output_parsers import PydanticOutputParser
-from src.conn_utils.mongo_conn import FeedbackClassificationPortalDaQuiexa, ListFeedbackPortalDaQuiexa, CollectionPortalDaQuixa, ListCollectionPortalDaQuixa, RelatorioMensal
+from src.conn_utils.mongo_conn import FeedbackClassificationPortalDaQuiexa, ListFeedbackPortalDaQuiexa, \
+    CollectionPortalDaQuixa, ListCollectionPortalDaQuixa, MonthlyReport, AnaliseItem
 from src.utils.utils_portal_da_queixa import prep_feedback_portal_da_queixa
 
 def get_llm_model():
@@ -46,7 +47,9 @@ def llm_prompt_chain(pydantic_object, template, input_variables):
 def feedback_classifier_portal_da_queixa():
 
     template = """
-    Tu és um assistente especializado em análise e classificação de feedback de clientes. A tua tarefa é ler atentamente o feedback fornecido e classificá-lo de acordo com os seguintes critérios. Seja preciso e objetivo, baseando-se *exclusivamente* no texto do feedback. Sua classificação ajudará a empresa a entender melhor as necessidades e preocupações dos clientes.
+    Tu és um assistente especializado em análise e classificação de feedback de clientes. A tua tarefa é ler atentamente o feedback fornecido e 
+    classificá-lo de acordo com os seguintes critérios. Seja preciso e objetivo, baseando-se *exclusivamente* no texto do feedback. Sua classificação 
+    ajudará a empresa a entender melhor as necessidades e preocupações dos clientes.
     A empresa é uma operadora de TV, Net e Telefone.
 
     **Instruções:**
@@ -94,7 +97,9 @@ def feedback_classifier_portal_da_queixa():
             *   `Informação Incorreta/Enganosa`: O cliente recebeu informação errada ou se sentiu enganado.
             *   `Problema de Pagamento/Cobrança`: Problemas relacionados a faturas, pagamentos, reembolsos.
 
-        *   **Assunto:** Um nível a mais de detalhe *dentro* da `classe`. Seja *conciso* (máximo de 4 palavras). Não seja muito especifico e tente sempre generalizar. Veja contexto adicional para ver se já existe um assunto relacionado. Se o contexto adicional tiver poucos exemplos é porque ainda existem poucos casos, neste caso pode usar um dos exemplos ou sugerir um novo.
+        *   **Assunto:** Um nível a mais de detalhe *dentro* da `classe`. Seja *conciso* (máximo de 4 palavras). 
+            Não seja muito especifico e tente sempre generalizar. Veja contexto adicional para ver se já existe um assunto relacionado. 
+            Se o contexto adicional tiver poucos exemplos é porque ainda existem poucos casos, neste caso pode usar um dos exemplos ou sugerir um novo.
             Exemplos (mas você pode sugerir outros):
                 *  "Demora na entrega"
                 *   "Produto com defeito"
@@ -121,7 +126,8 @@ def feedback_classifier_portal_da_queixa():
 
     4.  **Contexto Adicional (Classificações Anteriores):**
 
-        Para ajudar na consistência, aqui estão alguns exemplos de classificações anteriores (área de feedback, classe e assunto). Use isso como guia, mas *não se limite* a esses exemplos.
+        Para ajudar na consistência, aqui estão alguns exemplos de classificações anteriores (área de feedback, classe e assunto). 
+        Use isso como guia, mas *não se limite* a esses exemplos.
         ```
         {additional_context}
         ```
@@ -129,7 +135,8 @@ def feedback_classifier_portal_da_queixa():
     5.  **Restrições:**
 
         *   Responda *APENAS* com o JSON formatado. Não inclua texto adicional antes ou depois do JSON.
-        *   Você é livre para sugerir novos valores para `área de feedback`, `classificação` e `assunto` que não estejam listados, se isso tornar a classificação mais precisa.
+        *   Você é livre para sugerir novos valores para `área de feedback`, `classificação` e `assunto` 
+            que não estejam listados, se isso tornar a classificação mais precisa.
 
     6.  **Feedback a ser classificado:**
 
@@ -215,7 +222,7 @@ def feedback_report_portal_da_queixa():
     """
 
     try:
-        return llm_prompt_chain(RelatorioMensal, template, ["json_data_str"])
+        return llm_prompt_chain(MonthlyReport, template, ["json_data_str"])
     except Exception as e:
         e.add_note(f"Error report portal da queixa: {e}")
         raise
@@ -243,4 +250,84 @@ def process_report_portal_da_queixa(chain, json_data_str):
         return output
     except Exception as e:
         e.add_note(f"Error processing relatorio portal da queixa: {e}")
+        raise
+
+
+def feedback_report():
+    template = """
+    Você é um analista de feedback de clientes especializado em identificar tendências, padrões e áreas de melhoria em serviços de atendimento ao cliente. 
+    A empresa em questão é uma empresa de telecomunicações (TV, internet e telefone) e as plataformas onde são recolhidos os feedbacks podem ter origens 
+    diferentes. Por exemplo, livros de reclamações tanto online como fisico, clientes mistério, redes sociais várias, plataformas online de defesa e apoio ao consumidor, questionários de satisfação 
+    preenchidos pelos clientes que são fornecidos ao cliente depois de visitarem uma loja fisica ou depois de o cliente ter usado uma das plataformas online da empresa, 
+    por exemplo website, aplicações ou interação com chatbots. Em todos os casos os clientes deixam um feedback que pode ser positivo ou negativo, por exemplo, sobre o atendimento, sobre a plataforma, satisfação do cliente, se o problema foi resolvido ou não, 
+    tempo de espera, etc.
+    A sua tarefa é analisar os dados de feedback de clientes, fornecidos em texto, e gerar um relatório conciso e acionável.
+
+    **Instruções:** Responde sempre em Português de Portugal.
+
+    1.  **Leia os Dados de Feedback:** Os dados de feedback de cada mês serão fornecidos como texto de pergunta aberta. 
+
+    2.  **Analise os Dados:** de entrada, realize as seguintes análises:
+
+        *   **Principais Temas:**
+            *   Identifica os principais temas dos feedbacks.
+            *   Descreve as principais intenções de cada tema.
+            *   Calcule a percentagem total de cada tema.
+            *   Ordena por ordem decrescente.
+
+    2.1. Faz uma lista sobre alguns dos tópicos do que os cliente dizem sobre o que deve ser melhorado.
+
+    2.2. Sugere plano de propostas de melhoria para serviços de atendimento ao cliente com base nos principais temas identificados.
+
+
+    3.  **Gere o Relatório (Saída):**  Retorne um JSON com a seguinte estrutura:
+
+    ```json
+    {{
+        "analise": [
+        {{
+            "tema": "Principal tema do feedback",
+            "descricao": "Descrição das principais intenções deste tema",
+            "percentagem": Valor total percentual de feedbacks que se inseren neste tema.
+        }},
+        ... mais temas
+        ],
+        "sugestoes_de_melhoria_dos_clientes": [
+            "Sugestão 1 (sugestão mais solicitada 1 - máximo 50 palavras).",
+            "Sugestão 2 (sugestão mais solicitada 2 - máximo 50 palavras).",
+            "Sugestão 3 (sugestão mais solicitada 3 - máximo 50 palavras).",
+            "Sugestão 4 (sugestão mais solicitada 4 - máximo 50 palavras).",
+            .... mais sugestões
+        ],
+        "propostas_de_melhoria_AI": [
+            "Ação sugerida 1 (seja específico, com foco no problema e na solução - máximo 50 palavras).",
+            "Ação sugerida 2 (seja específico - máximo 50 palavras).",
+            "Ação sugerida 3 (seja específico - máximo 50 palavras).",
+            "Ação sugerida 4 (seja específico - máximo 50 palavras).",
+            .... mais ações
+        ]
+    }} 
+    ```
+
+    4. **Dados do feedback Feedback:**
+    {data_str}
+
+    5. **Output format instructions:**
+    {format_instructions}
+
+    """
+
+    try:
+        return llm_prompt_chain(MonthlyReport, template, ["data_str"])
+    except Exception as e:
+        e.add_note(f"Error report: {e}")
+        raise
+
+
+def process_report(chain, data_str):
+    try:
+        output = chain.invoke({"data_str": data_str})
+        return output
+    except Exception as e:
+        e.add_note(f"Error processing report: {e}")
         raise

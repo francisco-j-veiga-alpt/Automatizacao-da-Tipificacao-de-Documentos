@@ -1,60 +1,22 @@
-// src/App.tsx
-import React, { useState, useEffect } from 'react';
-import { Container, Spinner } from 'react-bootstrap';
-import Dashboard from './components/Dashboard';
-import { FeedbackData } from './types';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/feedback/portal-da-queixa/summary';
+// App.tsx
+import React from 'react';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import Dashboard from './pages/Dashboard';
+import PortalQueixa from './pages/PortalDaQeixa';
+import QualChatbot from './pages/QualtricsChatbot';
+import NavBar from './components/NavBar';
+import './index.css';
 
 const App: React.FC = () => {
-  const [feedbackData, setFeedbackData] = useState<FeedbackData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch(API_URL);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data: FeedbackData = await response.json();
-        setFeedbackData(data);
-      } catch (e: any) {
-        setError(e.message);
-        console.error("Could not fetch data: ", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
-  if (loading) {
-    return (
-      <Container className="d-flex justify-content-center align-items-center vh-100">
-        <Spinner animation="border" role="status">
-          <span className="visually-hidden">Loading...</span>
-        </Spinner>
-      </Container>
-    );
-  }
-
-  if (error) {
-    return <Container className="text-danger">Error: {error}</Container>;
-  }
-
-  if (!feedbackData) {
-    return <Container>No data to display.</Container>;
-  }
-
   return (
-    <Container>
-      <h1>Feedback Dashboard</h1>
-      <Dashboard data={feedbackData} />
-    </Container>
+      <Router>
+          <NavBar />
+          <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/portal-da-queixa" element={<PortalQueixa />} />
+              <Route path="/qualtrics-chatbot" element={<QualChatbot />} />
+          </Routes>
+      </Router>
   );
 };
 
