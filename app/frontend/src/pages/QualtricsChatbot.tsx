@@ -1,14 +1,16 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+// QualtricsChatbot.tsx
 
-const QualtricsChatbotStats: React.FC = () => {
+import React from 'react';
+import NavBar from '../components/NavBar';
+
+const QualtricsChatbot: React.FC = () => {
   return (
-    <div>
-      <h1>Second Page</h1>
-      <p>This is a placeholder for the second page.</p>
-      <Link to="/">Back to Dashboard</Link>
+    <div className="main-content">
+      <NavBar />
+      <h1>Qualtrics Chatbot</h1>
+      <p>This is a placeholder for the Qualtrics Chatbot page.</p>
     </div>
   );
 };
 
-export default QualtricsChatbotStats;
+export default QualtricsChatbot;

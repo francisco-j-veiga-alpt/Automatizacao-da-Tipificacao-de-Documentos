@@ -5,55 +5,51 @@ import { DashboardData } from '../types/dashboardTypes';
 import SentimentTrendChart from '../components/SentimentTrendChart';
 import AreaTrendChart from '../components/AreaTrendChart';
 import TopIssuesChart from '../components/TopIssuesChart';
-import NavBar from '../components/NavBar';
+import '../index.css'; // Import global CSS
 
 const Dashboard: React.FC = () => {
-    const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-    const [error, setError] = useState<string | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const data = await fetchDashboardData(3);
-                setDashboardData(data);
-            } catch (error) {
-                console.error('Error fetching dashboard data:', error);
-                setError('Failed to fetch dashboard data. Please try again later.');
-            }
-        };
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const data = await fetchDashboardData(3);
+        setDashboardData(data);
+      } catch (error) {
+        setError('Failed to fetch dashboard data. Please try again later.');
+      }
+    };
 
-        fetchData();
-    }, []);
+    fetchData();
+  }, []);
 
-    if (error) {
-        return <div className="dashboard">Error: {error}</div>;
-    }
+  if (error) return <div>Error: {error}</div>;
+  if (!dashboardData) return <div>Loading...</div>;
 
-    if (!dashboardData || !dashboardData.results_total_by_mont) {
-        return <div className="dashboard">Loading...</div>;
-    }
+  return (
+    <div className="dashboard-container">
+      <h1>Cliente Feedback Dashboard</h1>
 
-    return (
-        <>
-            <div className="dashboard"> {/* Added dashboard container */}
-                <h1>Cliente Feedback Dashboard</h1>
-                <div className="chart-row">
-                    <div className="chart-half">
-                        <h2>Sentimento do Cliente</h2>
-                        <SentimentTrendChart data={dashboardData.results_total_by_mont} />
-                    </div>
-                    <div className="chart-half">
-                        <h2>Área de Feedback</h2>
-                        <AreaTrendChart data={dashboardData.results_total_by_mont} />
-                    </div>
-                </div>
-                <div className="chart chart-full">
-                    <h2>Top 10 Assunto</h2>
-                    <TopIssuesChart data={dashboardData.results_total_by_mont} />
-                </div>
-            </div> {/* Added dashboard container */}
-        </>
-    );
+      <div className="dashboard-content">
+        <div className="side-by-side">
+          <div className="dashboard-box">
+            <h2>Sentimento do Cliente</h2>
+            <SentimentTrendChart data={dashboardData.results_total_by_mont} />
+          </div>
+          <div className="dashboard-box">
+            <h2>Área de Feedback</h2>
+            <AreaTrendChart data={dashboardData.results_total_by_mont} />
+          </div>
+        </div>
+
+        <div className="dashboard-box" style={{ width: '100%' }}>
+          <h2>Top 10 Assuntos</h2>
+          <TopIssuesChart data={dashboardData.results_total_by_mont} />
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Dashboard;

@@ -1,49 +1,9 @@
+/* index.css */
+
 body {
   margin: 0;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: Segoe UI, Tahoma, sans-serif;
   overflow-x: hidden; /* Prevent horizontal scroll */
-}
-
-.dashboard {
-  max-width: 1200px;
-  margin: 20px auto;
-  padding: 20px;
-}
-
-.chart-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 20px;
-}
-
-.chart {
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  padding: 20px;
-  border: 1px solid #eee;
-}
-
-.chart-half {
-  flex: 1;
-  min-width: calc(50% - 20px);
-}
-
-.chart-full {
-  width: 100%;
-}
-
-@media (max-width: 768px) {
-  .chart-row {
-      flex-direction: column;
-      gap: 10px;
-  }
-
-  .chart-half {
-      width: 100%;
-      min-width: unset;
-  }
 }
 
 h1, h2 {
@@ -60,6 +20,7 @@ h2 {
 }
 
 /* Navigation Bar Styles */
+
 .navbar {
   background-color: #333;
   padding: 1rem;
@@ -91,4 +52,125 @@ h2 {
 
 .nav-links a:hover {
   color: #1FABEB;
+}
+
+/* Dashboard Styles */
+
+.dashboard-container {
+  max-width: 1200px;
+  margin: 20px auto;
+  padding: 20px;
+}
+
+.dashboard-content {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.side-by-side {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.dashboard-box {
+  background-color: white;
+  border: 1px solid #ddd;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin: 10px;
+  width: calc(50% - 20px);
+}
+
+.dashboard-box h2 {
+  margin-top: 0;
+}
+
+/* Portal da Queixa Styles */
+
+.portal-container {
+  max-width: 1200px;
+  margin: 20px auto;
+  padding: 20px;
+}
+
+.portal-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.portal-table {
+  margin: 20px 0;
+  padding: 10px;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.portal-table th, .portal-table td {
+  border: 1px solid #ddd;
+  padding: 10px;
+  text-align: left;
+}
+
+.portal-table th {
+  background-color: #f0f0f0;
+}
+
+/* Suggestions and Recommendations Styles */
+
+.suggestions-container {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.suggestions-box {
+  flex: 1;
+  background-color: white;
+  border: 1px solid #ddd;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.suggestions-box h2 {
+  margin-top: 0;
+}
+
+.suggestions-box ul, .suggestions-box ol {
+  margin-bottom: 20px;
+}
+
+.suggestions-box li {
+  padding: 5px;
+  border-bottom: 1px solid #ddd;
+}
+
+.suggestions-box li:last-child {
+  border-bottom: none;
+}
+
+/* Responsive Design Adjustments */
+
+@media (max-width: 768px) {
+  .dashboard-box {
+    width: 100%;
+  }
+
+  .side-by-side {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .suggestions-container {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .portal-container {
+    padding: 10px;
+  }
 }

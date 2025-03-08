@@ -211,7 +211,7 @@ def get_collection_unique_timestamps(collection, date_field_name="data", format_
             },
             { 
             "$sort": { 
-                "_id": 1 
+                "_id": -1 
             } 
             },
             {

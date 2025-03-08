@@ -1,22 +1,34 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000/feedback/portal-da-queixa/summary';
-
+// Fetch dashboard data for the last N months
 export const fetchDashboardData = async (numLastMonths: number) => {
   try {
-    const response = await axios.get(`${API_URL}?num_last_months=${numLastMonths}`);
-    return response.data[0];
+    const response = await axios.get(`http://localhost:8000/feedback/portal-da-queixa/summary?num_last_months=${numLastMonths}`);
+    return response.data[0]; // Adjust based on your API's response structure
   } catch (error) {
     console.error('Error fetching dashboard data:', error);
     throw error;
   }
 };
 
-// services/api.ts
-export const fetchPortalDaQueixaData = async (year: number, month: number) => {
-  const response = await fetch(
-    `/api/feedback/portal_da_queixa/report?year=${year}&month=${month}`
-  );
-  return response.json();
+// Fetch available timestamps
+export const fetchAvailableTimestamps = async () => {
+  try {
+    const response = await axios.get(`http://localhost:8000/feedback/portal_da_queixa_reports/list-timestamp`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching timestamps:', error);
+    throw error;
+  }
 };
 
+// Fetch report data for a specific year and month
+export const fetchReportData = async (year: string, month: string) => {
+  try {
+    const response = await axios.get(`http://localhost:8000/feedback/portal_da_queixa/report?year=${year}&month=${month}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching report:', error);
+    throw error;
+  }
+};
