@@ -1,5 +1,5 @@
-import React from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import React, { useState } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { MonthData } from '../types/dashboardTypes';
 
 interface AreaTrendChartProps {
@@ -7,28 +7,53 @@ interface AreaTrendChartProps {
 }
 
 const AreaTrendChart: React.FC<AreaTrendChartProps> = ({ data }) => {
-  const areas = data[0].sentiments[0].areas.map(area => area.area);
+  const areas = Array.from(
+    new Set(data.flatMap(month => month.sentiments.flatMap(sentiment => sentiment.areas.map(area => area.area))))
+  );
+
+  const [activeArea, setActiveArea] = useState<string | null>(null); // Track the currently active area or show all
+
   const chartData = data.map(month => {
     const result: any = { month: month.yearMonth };
-    areas.forEach(area => {
-      result[area] = month.sentiments[0].areas.find(a => a.area === area)?.count || 0;
+    areas.forEach(areaName => {
+      result[areaName] =
+        month.sentiments.flatMap(s => s.areas).find(a => a.area === areaName)?.count || 0;
     });
     return result;
   });
 
-  const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088FE', '#00C49F'];
+  const handleLegendClick = (e: any) => {
+    const clickedArea = e.dataKey as string;
+    setActiveArea(prevActiveArea => (prevActiveArea === clickedArea ? null : clickedArea)); // Toggle between the clicked area and showing all
+  };
+
+  const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088FE', '#00C49F', '#FF4D4F'];
 
   return (
-    <AreaChart width={600} height={300} data={chartData}>
-      <CartesianGrid strokeDasharray="3 3" />
-      <XAxis dataKey="month" />
-      <YAxis />
-      <Tooltip />
-      <Legend />
-      {areas.map((area, index) => (
-        <Area key={area} type="monotone" dataKey={area} stackId="1" stroke={colors[index % colors.length]} fill={colors[index % colors.length]} />
-      ))}
-    </AreaChart>
+    <ResponsiveContainer width="100%" height={300}>
+      <LineChart data={chartData}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="month" />
+        <YAxis />
+        <Tooltip />
+        <Legend
+          onClick={handleLegendClick}
+          wrapperStyle={{ fontSize: '14px', cursor: 'pointer' }}
+        />
+        {areas.map((areaName, index) =>
+          (activeArea === null || activeArea === areaName) && (
+            <Line
+              key={areaName}
+              type="monotone"
+              dataKey={areaName}
+              stroke={colors[index % colors.length]}
+              strokeWidth={2}
+              dot={{ r: 4 }}
+            />
+          )
+        )}
+      </LineChart>
+    </ResponsiveContainer>
   );
 };
 

@@ -12,9 +12,9 @@ export const fetchDashboardData = async (numLastMonths: number) => {
 };
 
 // Fetch available timestamps
-export const fetchAvailableTimestamps = async () => {
+export const fetchAvailableTimestamps = async (source: string) => {
   try {
-    const response = await axios.get(`http://localhost:8000/feedback/portal_da_queixa_reports/list-timestamp`);
+    const response = await axios.get(`http://localhost:8000/feedback/${source}/list-timestamp`);
     return response.data;
   } catch (error) {
     console.error('Error fetching timestamps:', error);
@@ -23,9 +23,9 @@ export const fetchAvailableTimestamps = async () => {
 };
 
 // Fetch report data for a specific year and month
-export const fetchReportData = async (year: string, month: string) => {
+export const fetchReportData = async (source:string, year: string, month: string) => {
   try {
-    const response = await axios.get(`http://localhost:8000/feedback/portal_da_queixa/report?year=${year}&month=${month}`);
+    const response = await axios.get(`http://localhost:8000/feedback/${source}/report?year=${year}&month=${month}`);
     return response.data;
   } catch (error) {
     console.error('Error fetching report:', error);

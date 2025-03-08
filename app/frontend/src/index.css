@@ -3,12 +3,11 @@
 body {
   margin: 0;
   font-family: Segoe UI, Tahoma, sans-serif;
-  overflow-x: hidden; /* Prevent horizontal scroll */
+  overflow-x: hidden;
 }
 
 h1, h2 {
   color: #333;
-  margin-bottom: 15px;
 }
 
 h1 {
@@ -56,17 +55,19 @@ h2 {
 
 /* Dashboard Styles */
 
-.dashboard-container {
+.dashboard-container, .portal-container {
   max-width: 1200px;
-  margin: 20px auto;
+  margin: auto;
   padding: 20px;
 }
+
+
 
 .dashboard-content {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-}
+  gap: 20px;
+ }
 
 .side-by-side {
   display: flex;
@@ -76,25 +77,26 @@ h2 {
 
 .dashboard-box {
   background-color: white;
-  border: 1px solid #ddd;
-  padding: 20px;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  margin: 10px;
-  width: calc(50% - 20px);
+  padding: 20px;
+  box-shadow: 0px 2px 4px rgba(0,0,0,.1);
+  
+  /* Ensure boxes take up ~50% width minus gap */
+  flex: calc(50% - 20px);
+ }
+
+ .dashboard-box.full-width {
+  flex-basis: calc(100% - 20px);
 }
 
 .dashboard-box h2 {
-  margin-top: 0;
+  margin-top:0;
 }
 
+.recharts-wrapper {
+  margin-top: -10px; /* Adjust spacing */
+}
 /* Portal da Queixa Styles */
-
-.portal-container {
-  max-width: 1200px;
-  margin: 20px auto;
-  padding: 20px;
-}
 
 .portal-content {
   display: flex;
@@ -156,8 +158,11 @@ h2 {
 /* Responsive Design Adjustments */
 
 @media (max-width: 768px) {
-  .dashboard-box {
-    width: 100%;
+  .dashboard-content{
+    flex-direction:column;
+  }
+  .dashboard-box{
+    flex:100%;
   }
 
   .side-by-side {
@@ -174,3 +179,23 @@ h2 {
     padding: 10px;
   }
 }
+
+/* Custom Dropdown Styling */
+.custom-dropdown {
+  width: auto;
+  padding: 10px;
+  font-size: 16px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  background-color: #f9f9f9;
+  color: #333;
+}
+
+.custom-dropdown:hover {
+  background-color: #e6e6e6;
+}
+
+.custom-dropdown option {
+  padding: 10px;
+}
+
