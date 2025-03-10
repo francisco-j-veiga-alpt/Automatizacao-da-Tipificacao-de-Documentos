@@ -169,7 +169,7 @@ async def feedback_report_api(
         
         db, collection, client = connect_to_collection(uri_feedback, db_feedback, source + "_reports")
 
-        report_month = get_data_by_year_month(collection, year, month, "data", {'$project': {'_id': 0}})
+        report_month = get_data_by_year_month(collection, year, month, "data", {'$project': {'_id': 0}})[0]
 
         return report_month
 

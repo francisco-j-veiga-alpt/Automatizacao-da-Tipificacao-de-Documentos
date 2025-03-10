@@ -173,7 +173,7 @@ def get_data_by_year_month(collection, year, month, date_field, project):
             }, project
         ]
 
-        return list(collection.aggregate(pipeline))[0]
+        return list(collection.aggregate(pipeline))
     except Exception as e:
         e.add_note(f"Get monthly feedback error: {e}")
         raise
