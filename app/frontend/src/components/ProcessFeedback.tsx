@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
-import { processFeedback, ProcessFeedbackParams } from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { processFeedback, ProcessFeedbackParams, fetchLatestTimestamp } from '../services/api';
+import '../index.css';
 
-const ProcessFeedback: React.FC = () => {
+interface ProcessFeedbackProps {
+  source: string; // Source passed as a prop
+}
+
+const ProcessFeedback: React.FC<ProcessFeedbackProps> = ({ source }) => {
   const [formData, setFormData] = useState<ProcessFeedbackParams>({
     to_date: '',
     last_date: '',
@@ -10,10 +15,30 @@ const ProcessFeedback: React.FC = () => {
     delete_feedback: true,
   });
 
+  const [latestTimestamp, setLatestTimestamp] = useState<string | null>(null); // State to store the latest timestamp
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false); // State to toggle form visibility
+
+  // Fetch the latest timestamp when the component loads
+  useEffect(() => {
+    const fetchTimestamp = async () => {
+      try {
+        const timestamp = await fetchLatestTimestamp(source); // Call API to get the latest timestamp
+        const datePart = timestamp.split(' ')[0]; // Extract only the date part (e.g., "2025-02-22")
+        setLatestTimestamp(datePart); // Store only the date part in state
+        setFormData(prev => ({
+          ...prev,
+          last_date: datePart, // Pre-fill last_date in formData
+        }));
+      } catch (error) {
+        console.error('Error fetching latest timestamp:', error);
+      }
+    };
+
+    fetchTimestamp();
+  }, [source]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const target = e.target;
@@ -67,6 +92,11 @@ const ProcessFeedback: React.FC = () => {
       {showForm && (
         <div className="process-feedback-form">
           <h3>Process Feedback</h3>
+          {latestTimestamp && (
+            <p>
+              <strong>Last Processed Date:</strong> {latestTimestamp}
+            </p>
+          )}
           <div className="form-group">
             <label>To Date:</label>
             <input

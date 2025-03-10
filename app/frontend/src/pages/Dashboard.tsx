@@ -34,7 +34,7 @@ const Dashboard: React.FC = () => {
 
   return (
     <>
-    <ProcessFeedback /> 
+    <ProcessFeedback source='portal_da_queixa'/> 
     <div className="dashboard-container">
       <h1>Cliente Feedback Dashboard</h1>
 

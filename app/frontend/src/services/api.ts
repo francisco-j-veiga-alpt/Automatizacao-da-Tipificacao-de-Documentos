@@ -73,3 +73,13 @@ export const processReport = async (params: ProcessReportParams, source: string)
     throw error;
   }
 };
+
+export const fetchLatestTimestamp = async (source: string): Promise<string> => {
+  try {
+    const response = await axios.get(`http://localhost:8000/feedback/${source}/latest-timestamp`);
+    return response.data; // The API returns a string like "2025-02-22 00:00:00"
+  } catch (error) {
+    console.error('Error fetching latest timestamp:', error);
+    throw error;
+  }
+};
