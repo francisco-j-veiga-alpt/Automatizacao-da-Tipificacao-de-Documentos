@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { FeedbackData } from '../types/feedbackTypes';
+import ProcessReport from '../components/ProcessReport';
 import {
   BarChart,
   Bar,
@@ -50,6 +51,8 @@ const FeedbackTemplate: React.FC<FeedbackTemplateProps> = ({
   if (!data) return <div>No data available</div>;
 
   return (
+    <>
+    <ProcessReport source="portal_da_queixa"/>
     <div className="portal-container">
       <h1>
         {title} (
@@ -135,6 +138,7 @@ const FeedbackTemplate: React.FC<FeedbackTemplateProps> = ({
         </div>
       </div>
     </div>
+    </>
   );
 };
 

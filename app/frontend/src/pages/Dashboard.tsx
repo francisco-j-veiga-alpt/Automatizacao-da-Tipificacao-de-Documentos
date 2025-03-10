@@ -6,6 +6,7 @@ import { DashboardData } from '../types/dashboardTypes';
 import SentimentTrendChart from '../components/SentimentTrendChart';
 import AreaTrendChart from '../components/AreaTrendChart';
 import TopIssuesChart from '../components/TopIssuesChart';
+import ProcessFeedback from '../components/ProcessFeedback';
 import '../index.css'; // Import global CSS
 
 const Dashboard: React.FC = () => {
@@ -32,6 +33,8 @@ const Dashboard: React.FC = () => {
   if (!dashboardData) return <div>No data available</div>;
 
   return (
+    <>
+    <ProcessFeedback /> 
     <div className="dashboard-container">
       <h1>Cliente Feedback Dashboard</h1>
 
@@ -52,6 +55,7 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 

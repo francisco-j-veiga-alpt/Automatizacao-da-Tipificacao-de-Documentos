@@ -32,3 +32,44 @@ export const fetchReportData = async (source:string, year: string, month: string
     throw error;
   }
 };
+
+export interface ProcessFeedbackParams {
+  to_date?: string;
+  last_date?: string;
+  begin_pages_to_look: number;
+  num_of_pages_to_look: number;
+  delete_feedback: boolean;
+}
+
+export const processFeedback = async (params: ProcessFeedbackParams) => {
+  try {
+    const response = await axios.post('http://localhost:8000/feedback/portal-da-queixa/process', params);
+    return response.data; // Should return { num_inserted_ids: number }
+  } catch (error) {
+    console.error('Error processing feedback:', error);
+    throw error;
+  }
+};
+
+export interface ProcessReportParams {
+  year: number;
+  month: number;
+  delete_report: boolean;
+}
+
+export const processReport = async (params: ProcessReportParams, source: string) => {
+  try {
+    const response = await axios.post(
+      `http://localhost:8000/feedback/${source}/process-report`,
+      {
+        year: params.year,
+        month: params.month,
+        delete_report: params.delete_report,
+      }
+    );
+    return response.data; // Should return { inserted_id: "ok" }
+  } catch (error) {
+    console.error('Error processing report:', error);
+    throw error;
+  }
+};
