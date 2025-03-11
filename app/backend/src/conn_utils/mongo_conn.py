@@ -80,6 +80,7 @@ class AnaliseItem(BaseModel):
     tema: str = Field(..., description="Principal tema do feedback")
     descricao: str = Field(..., description="Descrição das principais intenções deste tema")
     percentagem: float = Field(..., description="Valor total percentual de feedbacks que se inserem neste tema.")
+    total: int = Field(..., description="Contagem total de feedbacks que se inserem neste tema.")
 
 
 class MonthlyReport(BaseModel):

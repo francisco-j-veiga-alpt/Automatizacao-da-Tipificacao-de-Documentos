@@ -272,8 +272,11 @@ def feedback_report():
         *   **Principais Temas:**
             *   Identifica os principais temas dos feedbacks.
             *   Descreve as principais intenções de cada tema.
-            *   Calcule a percentagem total de cada tema.
+            *   Calcule a percentagem e de cada tema. 
+            *   **IMPORTANTE** Calcule o total de feedbacks de cada tema, faça a contagem excata.
             *   Ordena por ordem decrescente.
+
+        ** Importante ** considera todos os feedbacks.
 
     2.1. Faz uma lista sobre alguns dos tópicos do que os cliente dizem sobre o que deve ser melhorado.
 
@@ -283,12 +286,13 @@ def feedback_report():
     3.  **Gere o Relatório (Saída):**  Retorne um JSON com a seguinte estrutura:
 
     ```json
-    {{
+    {{e
         "analise": [
         {{
             "tema": "Principal tema do feedback",
             "descricao": "Descrição das principais intenções deste tema",
-            "percentagem": Valor total percentual de feedbacks que se inseren neste tema.
+            "percentagem": "Valor total percentual de feedbacks que se inseren neste tema.",
+            "total": "Contagem total de feedbacks que se inserem neste tema."
         }},
         ... mais temas
         ],

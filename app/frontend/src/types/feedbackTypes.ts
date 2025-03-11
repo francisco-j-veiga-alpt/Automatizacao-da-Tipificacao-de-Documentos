@@ -4,6 +4,7 @@ export interface ComplaintAnalysis {
     tema: string;
     descricao: string;
     percentagem: number;
+    total: number
   }
   
   export interface FeedbackData {

@@ -104,6 +104,7 @@ const FeedbackTemplate: React.FC<FeedbackTemplateProps> = ({
             <th>Tema</th>
             <th>Descrição Detalhada</th>
             <th>Percentagem</th>
+            <th>Total</th>
           </tr>
         </thead>
         <tbody>
@@ -112,6 +113,7 @@ const FeedbackTemplate: React.FC<FeedbackTemplateProps> = ({
               <td>{item.tema}</td>
               <td>{item.descricao}</td>
               <td>{item.percentagem}%</td>
+              <td>{item.total}</td>
             </tr>
           ))}
         </tbody>
