@@ -83,3 +83,17 @@ export const fetchLatestTimestamp = async (source: string): Promise<string> => {
     throw error;
   }
 };
+
+export const uploadFileToApi = async (file: File): Promise<void> => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    await axios.post(`http://localhost:8000/feedback/cliente-misterio/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  } catch (error) {
+    console.error('Failed to upload file:', error);
+    throw error;
+  }
+};
