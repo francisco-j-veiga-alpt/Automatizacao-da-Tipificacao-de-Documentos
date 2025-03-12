@@ -1,59 +1,12 @@
 // src/pages/PortalDaQeixa.tsx
-
-import React, { useEffect, useState } from 'react';
-import { fetchAvailableTimestamps, fetchReportData } from '../services/api';
+import React from 'react';
 import FeedbackTemplate from '../components/FeedbackTemplate';
-import { FeedbackData } from '../types/feedbackTypes';
 
 const PortalDaQeixa: React.FC = () => {
-  const [feedbackData, setFeedbackData] = useState<FeedbackData | null>(null);
-  const [timestamps, setTimestamps] = useState<string[]>([]);
-  const [selectedTimestamp, setSelectedTimestamp] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const loadTimestamps = async () => {
-      try {
-        const data = await fetchAvailableTimestamps("portal_da_queixa_reports");
-        setTimestamps(data);
-        if (data.length > 0) {
-          setSelectedTimestamp(data[0]);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
-      }
-    };
-    loadTimestamps();
-  }, []);
-
-  useEffect(() => {
-    if (!selectedTimestamp) return;
-
-    const [year, month] = selectedTimestamp.split('-');
-    const loadReportData = async () => {
-      setLoading(true);
-      try {
-        const data = await fetchReportData("portal_da_queixa", year, month);
-        setFeedbackData(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadReportData();
-  }, [selectedTimestamp]);
-
   return (
     <FeedbackTemplate
       title="Portal da Queixa - Análise de Reclamações"
-      data={feedbackData}
-      loading={loading}
-      error={error}
-      timestamps={timestamps}
-      selectedTimestamp={selectedTimestamp}
-      onTimestampChange={setSelectedTimestamp}
+      source="portal_da_queixa"
     />
   );
 };
