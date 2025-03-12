@@ -6,7 +6,7 @@ import FeedbackTemplate from '../components/FeedbackTemplate';
 import { FeedbackData } from '../types/feedbackTypes';
 
 const PortalDaQeixa: React.FC = () => {
-  const [portalData, setPortalData] = useState<FeedbackData | null>(null);
+  const [feedbackData, setFeedbackData] = useState<FeedbackData | null>(null);
   const [timestamps, setTimestamps] = useState<string[]>([]);
   const [selectedTimestamp, setSelectedTimestamp] = useState('');
   const [loading, setLoading] = useState(true);
@@ -35,7 +35,7 @@ const PortalDaQeixa: React.FC = () => {
       setLoading(true);
       try {
         const data = await fetchReportData("portal_da_queixa", year, month);
-        setPortalData(data);
+        setFeedbackData(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {
@@ -48,7 +48,7 @@ const PortalDaQeixa: React.FC = () => {
   return (
     <FeedbackTemplate
       title="Portal da Queixa - Análise de Reclamações"
-      data={portalData}
+      data={feedbackData}
       loading={loading}
       error={error}
       timestamps={timestamps}

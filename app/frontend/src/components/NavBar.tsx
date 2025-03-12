@@ -10,6 +10,7 @@ const NavBar: React.FC = () => {
         <li><Link to="/dashboard">Dashboard</Link></li>
         <li><Link to="/portal-da-queixa">Portal da Queixa</Link></li>
         <li><Link to="/qualtrics-chatbot">Qualtrics Chatbot</Link></li>
+        <li><Link to="/cliente-misterio">Cliente Misterio</Link></li>
       </ul>
     </nav>
   );

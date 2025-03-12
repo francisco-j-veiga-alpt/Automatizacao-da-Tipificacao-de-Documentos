@@ -5,7 +5,7 @@ from dateutil.relativedelta import relativedelta
 from fastapi import FastAPI, APIRouter, HTTPException, status, Query, Path
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
-from src.utils.utils import string_to_date, subtract_n_months_and_get_first_day
+from src.utils.utils import subtract_n_months_and_get_first_day
 from src.conn_utils.mongo_conn import InputPostPortalDaQuiexa, connect_to_collection, \
     insert_data, ListCollectionPortalDaQuixa, delete_data_between_dates, get_data_by_year_month, \
         get_max_timestamp, InputReport, get_collection_unique_timestamps
@@ -20,9 +20,9 @@ db_user = os.environ.get("MONGO_PRINCIPAL_USER")
 db_password = os.environ.get("MONGO_PRINCIPAL_PASSWORD")
 db_feedback = os.environ.get("MONGO_DB_CUSTOMER_FEEDBACK")
 db_collection_portal_da_queixa = os.environ.get("MONGO_COLLECTION_PORTAL_DA_QUEIXA")
-db_collection_portal_da_queixa_report = os.environ.get("MONGO_COLLECTION_PORTAL_DA_QUEIXA_REPORTS")
-db_collection_qualtrics_online = os.environ.get("MONGO_COLLECTION_QUALTRICS_ONLINE")
-db_collection_qualtrics_online_report = os.environ.get("MONGO_COLLECTION_QUALTRICS_ONLINE_REPORTS")
+db_collection_portal_da_queixa_reports = os.environ.get("MONGO_COLLECTION_PORTAL_DA_QUEIXA_REPORTS")
+db_collection_qualtrics_chatbot = os.environ.get("MONGO_COLLECTION_QUALTRICS_CHATBOT")
+db_collection_qualtrics_chatbot_reports = os.environ.get("MONGO_COLLECTION_QUALTRICS_CHATBOT_REPORTS")
 
 uri_feedback = f"mongodb://{db_user}:{db_password}@{db_host}/{db_feedback}"
 
@@ -198,16 +198,20 @@ async def process_report_api(
         if source == db_collection_portal_da_queixa:
             date_field = "data"
             projection = {'$project': {'_id': 0, 'resumo': 1}}
-            report_collection = db_collection_portal_da_queixa_report
+            report_collection = db_collection_portal_da_queixa_reports
+        elif source == db_collection_qualtrics_chatbot:
+            date_field = "data"
+            projection = {'$project': {'_id': 0, 'str_list_feedbacks': 1}}
+            report_collection = db_collection_qualtrics_chatbot_reports
         else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid collection !")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid collection!")
 
         db, collection, client = connect_to_collection(uri_feedback, db_feedback, source)
         feed_month = get_data_by_year_month(collection=collection, date_field=date_field, month=request_data.month, year=request_data.year, project=projection)
         chain = feedback_report()
         output = process_report(chain, data_str=json.dumps(feed_month))
 
-        # # store report
+        # store report
         report_collection = db[report_collection]
         id_date = datetime(request_data.year, request_data.month, 1)
 
