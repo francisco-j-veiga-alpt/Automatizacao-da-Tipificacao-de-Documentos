@@ -1,29 +1,44 @@
+/* General Styles */
 body {
   margin: 0;
-  font-family: 'Arial', sans-serif;
+  font-family: 'Roboto', sans-serif;
+  /* Modern, readable font */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f4f4f4;
+  background-color: #f9f9f9;
+  /* Very light gray background */
   color: #333;
+  /* Dark gray text */
+  line-height: 1.6;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+/* Container for centering content */
+.container {
+  max-width: 960px;
+  margin: 20px auto;
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
-/* Navbar styles */
+h1 {
+  font-size: 2.5rem;
+  color: #2c3e50;
+  /* Dark blue-gray */
+  text-align: center;
+  margin-bottom: 30px;
+  font-weight: 500;
+}
+
+/* Navbar Styles */
 .navbar {
-  background-color: #333;
-  color: white;
-  padding: 10px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.navbar-brand {
-  font-size: 1.5em;
-  font-weight: bold;
+  background-color: #34495e;
+  /* Dark blue-gray navbar */
+  color: #fff;
+  padding: 15px 0;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 .navbar-nav {
@@ -31,77 +46,112 @@ code {
   padding: 0;
   margin: 0;
   display: flex;
+  justify-content: center;
 }
 
 .nav-item {
-  margin-left: 20px;
+  margin: 0 20px;
 }
 
 .nav-link {
-  color: white;
   text-decoration: none;
+  color: #fff;
+  font-weight: 400;
   transition: color 0.3s ease;
 }
 
 .nav-link:hover {
-  color: #bbb;
+  color: #f1c40f;
+  /* Yellow hover */
 }
 
-/* General page styles */
+/* UsersPage and ComprasPage Styles */
 .page-container {
   padding: 20px;
-  margin: 20px auto;
-  max-width: 800px;
-  background-color: white;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  border-radius: 5px;
 }
 
-h1 {
-  color: #333;
-  text-align: center;
-}
-
-/* Data display styles */
 .data-list {
   list-style: none;
   padding: 0;
 }
 
 .data-item {
-  padding: 10px;
-  border-bottom: 1px solid #eee;
+  background-color: #ecf0f1;
+  /* Light gray list items */
+  margin-bottom: 15px;
+  padding: 15px;
+  border-radius: 5px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+  transition: all 0.3s cubic-bezier(.25, .8, .25, 1);
 }
 
-.data-item:last-child {
-  border-bottom: none;
+.data-item:hover {
+  box-shadow: 0 7px 14px rgba(0, 0, 0, 0.25), 0 5px 5px rgba(0, 0, 0, 0.22);
+}
+
+/* Button Styles */
+button,
+.add-button {
+  background-color: #3498db;
+  /* Blue button */
+  color: #fff;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 1rem;
+}
+
+button:hover,
+.add-button:hover {
+  background-color: #2980b9;
+  /* Darker blue on hover */
+}
+
+.delete-button {
+  background-color: #e74c3c;
+  /* Red delete button */
+}
+
+.delete-button:hover {
+  background-color: #c0392b;
+}
+
+/* Message Styles */
+.success-message {
+  color: #27ae60;
+  /* Green success message */
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #d4edda;
+  border: 1px solid #c3e6cb;
+  border-radius: 4px;
+}
+
+.error-message {
+  color: #e74c3c;
+  /* Red error message */
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+}
+
+/* Loading and No Data Styles */
+.loading {
+  text-align: center;
+  font-size: 1.2rem;
+  margin-top: 30px;
+  color: #777;
 }
 
 .no-data {
   text-align: center;
+  font-size: 1.1rem;
+  margin-top: 30px;
   color: #777;
-}
-
-/* Loading and error states */
-.loading,
-.error {
-  text-align: center;
-  padding: 20px;
-  color: #721c24;
-  background-color: #f8d7da;
-  border: 1px solid #f5c6cb;
-  border-radius: 5px;
-  margin: 20px auto;
-  max-width: 800px;
-}
-
-/* Home Page styles */
-.home-container {
-  text-align: center;
-  padding: 20px;
-  margin: 20px auto;
-  max-width: 800px;
-  background-color: white;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  border-radius: 5px;
 }
