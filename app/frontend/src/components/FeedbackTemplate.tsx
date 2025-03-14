@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { FeedbackData } from '../types/feedbackTypes';
-import ProcessReport from '../components/ProcessReport';
 import { fetchAvailableTimestamps, fetchReportData } from '../services/api';
 import {
   BarChart,
@@ -10,7 +9,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from 'recharts';
 import '../index.css';
@@ -69,7 +67,7 @@ const FeedbackTemplate: React.FC<FeedbackTemplateProps> = ({ title, source }) =>
 
   return (
     <>
-      <ProcessReport source={source} />
+      
       <div className="portal-container">
         <h1>
           {title} (
