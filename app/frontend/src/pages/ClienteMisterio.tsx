@@ -10,7 +10,7 @@ const ClienteMisterio: React.FC = () => {
     <FileUploader source="cliente_misterio" />
     <ProcessReport source="cliente_misterio" />
     <FeedbackTemplate
-    title="Qualtrics Chatbot - Análise de Feedback"
+    title="Cliente Misterio - Análise de Feedback"
     source="cliente_misterio"
   />
   </>

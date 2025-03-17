@@ -1,6 +1,9 @@
 from dateutil.relativedelta import relativedelta
 from datetime import date, datetime, time
 import docx
+import pandas as pd
+from io import BytesIO
+import calendar
 
 def string_to_date(date_string):
     """
@@ -74,14 +77,13 @@ def subtract_n_months_and_get_first_day(num_of_months=2):
         raise
 
 
-
 def read_docx(file_path):
     try:
         doc = docx.Document(file_path)
         full_text = []
         for paragraph in doc.paragraphs:
             full_text.append(paragraph.text)
-        return '\n'.join(full_text)
+        return full_text
 
     except FileNotFoundError:
         add_note(f"Error: File not found at {file_path}")
@@ -92,3 +94,22 @@ def read_docx(file_path):
     except Exception as e:
         e.add_note(f"An unexpected error occurred: {e}")
         raise
+
+
+def cliente_misterio(content, year, month):
+    try:
+        # Read the Excel file into a DataFrame
+        df = pd.read_excel(BytesIO(content), header=5)
+        
+        # Filter rows where 'BranchName' contains 'MEO'
+        filtered_df = df[df['Q1.2 Loja Visitada'].str.contains('MEO', na=False)]
+        
+        # Get non-null values from 'Q49 Notas Adicionais | Sugestões de melhoria'
+        result = filtered_df['Q49 Notas Adicionais | Sugestões de melhoria'].dropna()
+
+        result = {"data": datetime(year, month, calendar.monthrange(year, month)[1]), "feedbacks_list": result.to_list()}
+        return result
+    
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return []

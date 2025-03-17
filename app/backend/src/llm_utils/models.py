@@ -7,6 +7,7 @@ from langchain.output_parsers import PydanticOutputParser
 from src.conn_utils.mongo_conn import FeedbackClassificationPortalDaQuiexa, ListFeedbackPortalDaQuiexa, \
     CollectionPortalDaQuixa, ListCollectionPortalDaQuixa, MonthlyReport, AnaliseItem
 from src.utils.utils_portal_da_queixa import prep_feedback_portal_da_queixa
+from langchain_openai.chat_models.azure import AzureChatOpenAI
 
 def get_llm_model():
     use_cloud_llm = int(os.environ.get("USE_CLOUD_LLM"))
@@ -14,8 +15,15 @@ def get_llm_model():
     timeout = int(os.environ.get("ARG_TIMEOUT"))
 
     try:
-        if use_cloud_llm:
+        if use_cloud_llm == 1:
             return ChatGoogleGenerativeAI(model=os.environ.get("GEMINI_MODEL_NAME"), google_api_key=os.environ.get("GOOGLE_API_KEY"), temperature=temperature, timeout=timeout)
+        elif use_cloud_llm == 2:
+            return AzureChatOpenAI(
+                deployment_name="gpt-4o",  # Replace with your deployment name
+                azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+                openai_api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+                api_version=os.getenv("OPENAI_API_VERSION")
+            )
         else:
             return OllamaLLM(model=os.environ.get("OLLAMA_MODEL_NAME"), temperature=temperature, timeout=timeout)
     except Exception as e:

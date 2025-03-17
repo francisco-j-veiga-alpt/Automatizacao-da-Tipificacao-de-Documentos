@@ -10,6 +10,9 @@ interface FileUploaderProps {
 
 const FileUploader: React.FC<FileUploaderProps> = ({ source, onUploadComplete }) => {
   const [file, setFile] = useState<File | null>(null);
+  const [year, setYear] = useState<number | ''>(''); // State for year input
+  const [month, setMonth] = useState<number | ''>(''); // State for month input
+  const [deleteReport, setDeleteReport] = useState<boolean>(true); // State for delete_report checkbox
   const [message, setMessage] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [showForm, setShowForm] = useState<boolean>(false); // Toggle state for showing/hiding the form
@@ -26,10 +29,14 @@ const FileUploader: React.FC<FileUploaderProps> = ({ source, onUploadComplete })
       setMessage('Please select a file.');
       return;
     }
+    if (!year || !month) {
+      setMessage('Please provide both year and month.');
+      return;
+    }
 
     setLoading(true);
     try {
-      await uploadFileToApi(file, source); // Pass both file and source to the API
+      await uploadFileToApi(file, source, year, month, deleteReport); // Pass file, source, year, month, and deleteReport to the API
       setMessage('File uploaded successfully!');
       if (onUploadComplete) onUploadComplete();
     } catch (error) {
@@ -56,7 +63,37 @@ const FileUploader: React.FC<FileUploaderProps> = ({ source, onUploadComplete })
           <h3>Upload File</h3>
           <div className="form-group">
             <label htmlFor="file">Select File:</label>
-            <input type="file" id="file" accept=".csv" onChange={handleFileChange} />
+            <input type="file" id="file" accept=".xls" onChange={handleFileChange} />
+          </div>
+          <div className="form-group">
+            <label htmlFor="year">Year:</label>
+            <input
+              type="number"
+              id="year"
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+              placeholder="Enter year (e.g., 2025)"
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="month">Month:</label>
+            <input
+              type="number"
+              id="month"
+              value={month}
+              onChange={(e) => setMonth(Number(e.target.value))}
+              placeholder="Enter month (1-12)"
+            />
+          </div>
+          <div className="form-group checkbox-group">
+            <label>
+              <input
+                type="checkbox"
+                checked={deleteReport}
+                onChange={(e) => setDeleteReport(e.target.checked)}
+              />
+              Delete Existing Data?
+            </label>
           </div>
           <button type="submit" className="submit-button">
             {loading ? 'Uploading...' : 'Upload'}

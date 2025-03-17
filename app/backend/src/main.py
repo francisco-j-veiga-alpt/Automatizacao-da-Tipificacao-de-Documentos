@@ -2,10 +2,10 @@ import os
 import json
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
-from fastapi import FastAPI, APIRouter, HTTPException, status, Query, Path
+from fastapi import FastAPI, APIRouter, HTTPException, status, Query, Path, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
-from src.utils.utils import subtract_n_months_and_get_first_day
+from src.utils.utils import subtract_n_months_and_get_first_day, cliente_misterio
 from src.conn_utils.mongo_conn import InputPostPortalDaQuiexa, connect_to_collection, \
     insert_data, ListCollectionPortalDaQuixa, delete_data_between_dates, get_data_by_year_month, \
         get_max_timestamp, InputReport, get_collection_unique_timestamps
@@ -13,6 +13,8 @@ from src.utils.utils_portal_da_queixa import get_portal_da_queixa_feedback
 from src.llm_utils.models import feedback_classifier_portal_da_queixa, process_feedback_portal_da_queixa, \
     feedback_report, process_report
 from src.conn_utils.queries_portal_da_queixa import results_total_by_month_filter_last_date_gte
+import calendar
+
 
 
 db_host = os.environ.get("MONGO_HOST")
@@ -23,6 +25,8 @@ db_collection_portal_da_queixa = os.environ.get("MONGO_COLLECTION_PORTAL_DA_QUEI
 db_collection_portal_da_queixa_reports = os.environ.get("MONGO_COLLECTION_PORTAL_DA_QUEIXA_REPORTS")
 db_collection_qualtrics_chatbot = os.environ.get("MONGO_COLLECTION_QUALTRICS_CHATBOT")
 db_collection_qualtrics_chatbot_reports = os.environ.get("MONGO_COLLECTION_QUALTRICS_CHATBOT_REPORTS")
+db_collection_cliente_misterio = os.environ.get("MONGO_COLLECTION_CLIENTE_MISTERIO")
+db_collection_cliente_misterio_reports = os.environ.get("MONGO_COLLECTION_CLIENTE_MISTERIO_REPORTS")
 
 uri_feedback = f"mongodb://{db_user}:{db_password}@{db_host}/{db_feedback}"
 
@@ -201,8 +205,12 @@ async def process_report_api(
             report_collection = db_collection_portal_da_queixa_reports
         elif source == db_collection_qualtrics_chatbot:
             date_field = "data"
-            projection = {'$project': {'_id': 0, 'str_list_feedbacks': 1}}
+            projection = {'$project': {'_id': 0, 'feedbacks_list': 1}}
             report_collection = db_collection_qualtrics_chatbot_reports
+        elif source == db_collection_cliente_misterio:
+            date_field = "data"
+            projection = {'$project': {'_id': 0, 'feedbacks_list': 1}}
+            report_collection = db_collection_cliente_misterio_reports
         else:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid collection!")
 
@@ -213,16 +221,16 @@ async def process_report_api(
 
         # store report
         report_collection = db[report_collection]
-        id_date = datetime(request_data.year, request_data.month, 1)
+        id_date = datetime(request_data.year, request_data.month, calendar.monthrange(request_data.year, request_data.month)[1])
 
         output = output.model_dump()
         output.update({"data": id_date})
 
-        day_before = id_date - relativedelta(days=1)
-        day_after = id_date + relativedelta(days=1)
+        del_before = id_date - relativedelta(months=1)
+        del_after = id_date + relativedelta(months=1)
 
         if request_data.delete_report:
-            res_del = delete_data_between_dates(report_collection, day_before, day_after, "data")
+            res_del = delete_data_between_dates(report_collection, del_before, del_after, "data")
             print("Deleted number of rows: ", res_del)
 
         insert_result = insert_data(report_collection, output)
@@ -235,6 +243,54 @@ async def process_report_api(
     finally:
         if client:
             client.close()
+
+
+@feedback_router.post("/{source}/upload", status_code=status.HTTP_201_CREATED)
+async def upload_file(
+    file: UploadFile = File(...),
+    year: int = Form(...),
+    month: int = Form(...),
+    delete_report: bool = Form(False),
+    source: str = Path(..., title="Feedbacks collection in MongoDB")
+):
+    try:
+
+        today = date.today()
+        if year > today.year:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Year!")
+        elif year == today.year and month > today.month:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Month!")
+        elif month < 1 or month > 12:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Month!")
+
+        db, collection, client = connect_to_collection(uri_feedback, db_feedback, source, create_collection=True)
+
+        content = await file.read()
+        if not file.filename.endswith((".xlsx", ".xls")):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only XLS|XLSX files are allowed.")
+
+        feedback = cliente_misterio(content, year, month)
+
+        del_date = datetime(year, month, 1)
+        del_before = del_date - relativedelta(months=1)
+        del_after = del_date + relativedelta(months=1)
+
+        if delete_report:
+            res_del = delete_data_between_dates(collection, del_before, del_after, "data")
+            print("Deleted number of rows: ", res_del)
+
+        insert_result = insert_data(collection, feedback)
+
+        return {"inserted_id": "ok"}
+
+    except Exception as e:
+        e.add_note(f"Error api upload file: {e}")
+        raise
+    finally:
+        if client:
+            client.close()
+
+
 
 
 

@@ -84,12 +84,21 @@ export const fetchLatestTimestamp = async (source: string): Promise<string> => {
   }
 };
 
-export const uploadFileToApi = async (file: File): Promise<void> => {
+export const uploadFileToApi = async (
+  file: File,
+  source: string,
+  year: number,
+  month: number,
+  deleteReport: boolean
+): Promise<void> => {
   const formData = new FormData();
   formData.append('file', file);
+  formData.append('year', String(year)); // Add year to form data
+  formData.append('month', String(month)); // Add month to form data
+  formData.append('delete_report', String(deleteReport)); // Add delete_report to form data
 
   try {
-    await axios.post(`http://localhost:8000/feedback/cliente-misterio/upload`, formData, {
+    await axios.post(`http://localhost:8000/feedback/${source}/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   } catch (error) {
