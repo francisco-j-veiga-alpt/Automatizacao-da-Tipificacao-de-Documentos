@@ -139,7 +139,7 @@ def delete_data_between_dates(collection, start_date, end_date, date_field):
         result = collection.delete_many(query)
         return result.deleted_count
         
-    except e:
+    except Exception as e:
         e.add_note(f"An error occurred when deleting data: {e}")
         raise
 

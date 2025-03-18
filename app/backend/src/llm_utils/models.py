@@ -16,14 +16,18 @@ def get_llm_model():
 
     try:
         if use_cloud_llm == 1:
-            return ChatGoogleGenerativeAI(model=os.environ.get("GEMINI_MODEL_NAME"), google_api_key=os.environ.get("GOOGLE_API_KEY"), temperature=temperature, timeout=timeout)
+            return ChatGoogleGenerativeAI(model=os.environ.get("GEMINI_MODEL_NAME"), 
+                google_api_key=os.environ.get("GOOGLE_API_KEY"), 
+                temperature=temperature, 
+                timeout=timeout)
         elif use_cloud_llm == 2:
             return AzureChatOpenAI(
                 deployment_name="gpt-4o",  # Replace with your deployment name
                 azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
                 openai_api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-                api_version=os.getenv("OPENAI_API_VERSION")
-            )
+                api_version=os.getenv("OPENAI_API_VERSION"),
+                temperature=temperature, 
+                timeout=timeout)
         else:
             return OllamaLLM(model=os.environ.get("OLLAMA_MODEL_NAME"), temperature=temperature, timeout=timeout)
     except Exception as e:
