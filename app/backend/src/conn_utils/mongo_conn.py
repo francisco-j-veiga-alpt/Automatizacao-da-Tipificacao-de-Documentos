@@ -110,13 +110,13 @@ def connect_to_collection(conn_str, db_name, collection_name, create_collection=
         raise
 
 
-def insert_data(collection, feed: List[Dict] | Dict):
+def insert_data(collection, data: List[Dict] | Dict):
     try:
-        if isinstance(feed, list):
-            result = collection.insert_many(feed)
+        if isinstance(data, list):
+            result = collection.insert_many(data)
             return [str(res) for res in result.inserted_ids]
         else:
-            result = collection.insert_one(feed)
+            result = collection.insert_one(data)
             return str(result.inserted_id)
     except Exception as e:
         e.add_note(f"Error inserting data: {e}")
@@ -137,6 +137,27 @@ def delete_data_between_dates(collection, start_date, end_date, date_field):
         }
 
         result = collection.delete_many(query)
+        return result.deleted_count
+        
+    except Exception as e:
+        e.add_note(f"An error occurred when deleting data: {e}")
+        raise
+
+
+def get_data_between_dates(collection, start_date, end_date, date_field):
+
+    try:
+        if not (isinstance(start_date, datetime) and isinstance(start_date, datetime)) :
+            raise ValueError("start_date + delta 1 must be earlier than end_date.")
+
+        if start_date + timedelta(days=1) >= end_date:
+            raise ValueError("start_date + delta 1 must be earlier than end_date.")
+        
+        query = {
+            date_field: {"$gt": start_date, "$lt": end_date}
+        }
+
+        result = collection.find(query)
         return result.deleted_count
         
     except Exception as e:
