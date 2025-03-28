@@ -169,3 +169,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+
+# OTHER in PROJ
+qualtrics_files/
+provedoria/
+app/backend/Untitled-1.ipynb
