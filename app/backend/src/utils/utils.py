@@ -85,11 +85,11 @@ def read_docx(file_path):
             full_text.append(paragraph.text)
         return full_text
 
-    except FileNotFoundError:
-        add_note(f"Error: File not found at {file_path}")
+    except FileNotFoundError as e:
+        e.add_note(f"Error: File not found at {file_path}")
         raise
-    except docx.opc.exceptions.PackageNotFoundError:
-        add_note(f"Error: Invalid .docx file at {file_path}")
+    except docx.opc.exceptions.PackageNotFoundError as e:
+        e.add_note(f"Error: Invalid .docx file at {file_path}")
         raise
     except Exception as e:
         e.add_note(f"An unexpected error occurred: {e}")

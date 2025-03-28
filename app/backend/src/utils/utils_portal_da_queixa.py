@@ -1,15 +1,11 @@
 import requests
 import os
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta
 from pydantic import ValidationError
 from src.utils.utils import string_to_date
-from src.conn_utils.mongo_conn import FeedbackPortalDaQuiexa, InputPostPortalDaQuiexa, ListFeedbackPortalDaQuiexa
+from src.conn_utils.mongo_conn import Feedback, ListFeedback, InputProcessPortalDaQueixa
 
-def prep_feedback_portal_da_queixa(feedback: FeedbackPortalDaQuiexa):
-    return feedback.titulo + "\n" + feedback.feedback
-
-def get_portal_da_queixa_feedback(params: InputPostPortalDaQuiexa):
+def get_portal_da_queixa_feedback(params: InputProcessPortalDaQueixa):
 
     try:
         page_url = os.environ.get("URL_PORTAL_DA_QUEIXA_COMPLAINTS")
@@ -60,13 +56,13 @@ def get_portal_da_queixa_feedback(params: InputPostPortalDaQuiexa):
                             else:
                                 complaint_text = complaint_text + child.strip()
                     data = {
-                        "data": complaint_date,
-                        "utilizador": customer_name,
-                        "titulo": complaint_title,
-                        "feedback": complaint_text
+                        "date": complaint_date,
+                        "user_id": customer_name,
+                        "feedback_full_text": complaint_title + ' \n' + complaint_text,
+                        "source": "portal_da_queixa"
                     }
                     try:
-                        feedback = FeedbackPortalDaQuiexa.model_validate(data)
+                        feedback = Feedback.model_validate(data)
                         feedback_data.append(feedback)
                     except ValidationError as e:
                         e.add_note(f"Validation Error with feedback: {e}")
@@ -78,7 +74,7 @@ def get_portal_da_queixa_feedback(params: InputPostPortalDaQuiexa):
                 raise ValueError(f"No complaint details found for URL: {url}")
         if len(feedback_data) == 0:
             raise ValueError("Feedback Data empty!")
-        return ListFeedbackPortalDaQuiexa(root=feedback_data)
+        return ListFeedback(list=feedback_data)
     except Exception as e:
         e.add_note(f"Error during requests step 2: {e}")
         raise

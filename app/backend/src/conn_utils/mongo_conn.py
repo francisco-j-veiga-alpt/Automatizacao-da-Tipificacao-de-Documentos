@@ -1,114 +1,67 @@
 from pymongo import MongoClient
-from pydantic import BaseModel, RootModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Dict, Optional
-from src.utils.utils import parse_date
-from datetime import timedelta, datetime, date, time
+from datetime import timedelta, datetime, time, date
 
 
-class InputPostPortalDaQuiexa(BaseModel):
+class InputProcessBase(BaseModel):
     to_date: Optional[datetime] = Field(
-        default_factory=lambda: datetime.combine(datetime.today().date(), time.min), description="Get feedback until to_date (exclusive)"
+        default_factory=lambda: datetime.combine(datetime.today().date(), time.min),
+        description="Get feedback until to_date (exclusive)"
     )
     last_date: Optional[datetime] = Field(
         default_factory=lambda: datetime.combine(datetime.today().date(), time.min) - timedelta(2),
-        description="Last date feedback was processed",
-    )
-    begin_pages_to_look: int = Field(
-        1, ge=1, description="Strat page to look for in the feedback pages"
-    )
-    num_of_pages_to_look: int = Field(
-        5, ge=2, description="Number of pages to look for in the feedback pages"
+        description="Last date feedback was processed (inclusive)"
     )
     delete_feedback: bool = Field(
         False, description="Delete any existing feedback prior to insertion between dates"
     )
 
     @model_validator(mode="after")
-    def check_date_relationship(cls, values: "InputPostPortalDaQuiexa"):
-        """Ensures to_date is greater than last_date + 1 day."""
+    def check_date_relationship(cls, values: "InputProcessBase"):
         if values.last_date is not None and values.to_date is not None:
             if values.to_date <= values.last_date + timedelta(days=1):
-                raise ValueError(
-                    "to_date must be greater than last_date + 1 day"
-                )
+                raise ValueError("to_date must be greater than last_date + 1 day")
         return values
 
+class InputProcessPortalDaQueixa(InputProcessBase):
+    begin_pages_to_look: int = Field(description="Page number in website to start scraping"),
+    num_of_pages_to_look: int = Field(description="Number of pages to look after beginning page")
 
-class FeedbackPortalDaQuiexa(BaseModel):
-    data: datetime = Field(description="Data do feedback")
-    utilizador: str = Field(description="Nome do utilizador na plataforma")
-    titulo: str = Field(description="Titulo do feedback")
-    feedback: str = Field(description="Feedback do utilizador.")
-    # TODO: metadata- rede social de consumidores online
+class Feedback(BaseModel):
+    date: datetime = Field(description="Date of the feedback")
+    user_id: str = Field(description="User's unique identfier e.g. on the platform")
+    feedback_full_text: str = Field(description="Complete text of the feedback in Portuguese.")
+    source: str = Field(description="Source of feedback")
 
+class FeedbackClassification(Feedback):
+    feedback_summary: str = Field(None, description="Summary of the feedback in Portuguese")
+    classification: str = Field(description="Main classification of the feedback")
+    sentiment: str = Field(description="Sentiment expressed in the feedback ('very positive', 'positive', 'very negative', 'negative', or 'neutral').")
 
-class ListFeedbackPortalDaQuiexa(RootModel[List[FeedbackPortalDaQuiexa]]):
-    root: List[FeedbackPortalDaQuiexa]
-
-
-class FeedbackClassificationPortalDaQuiexa(BaseModel):
-    area_de_feedback: str = Field(description="Area que o clente reclama")
-    classificacao: str = Field(description="A classe principal do feedback")
-    assunto: str = Field(description="Assunto do feedback")
-    sentimento: str = Field(description="O sentimento expresso no feedback ('Positivo', 'Negativo', or 'Neutro').")
-    resumo: str = Field(description="O resumo do feedback")
-    urgente: str = Field(description="Se assunto é urgente('Sim', 'Não)?")
-
-    @field_validator("sentimento")
+    @field_validator("sentiment")
     def sentiment_must_be_valid(cls, value):
-        if value.lower() not in ["positivo", "negativo", "neutro"]:
-            raise ValueError("Sentiment tem de ser 'Positivo', 'Negativo', or 'Neutro'")
+        if value not in ['Very Positive', 'Positive', 'Very Negative', 'Negative', 'Neutral']:
+            raise ValueError("Sentiment must be 'Very Positive', 'Positive', 'Very Negative', 'Negative', or 'Neutral'")
         return value.title()
 
 
-    @field_validator("urgente")
-    def urgente_must_be_valid(cls, value):
-        if value.lower() not in ["sim", "não"]:
-            raise ValueError("Urgente tem de ser 'Sim', 'Não")
-        return value.title()
+class ListFeedback(BaseModel):
+    list: List[Feedback]
 
-
-class CollectionPortalDaQuixa(FeedbackPortalDaQuiexa, FeedbackClassificationPortalDaQuiexa):
-    pass
-
-
-class ListCollectionPortalDaQuixa(RootModel[List[CollectionPortalDaQuixa]]):
-    root: List[CollectionPortalDaQuixa]
-
-
-class AnaliseItem(BaseModel):
-    tema: str = Field(..., description="Principal tema do feedback")
-    descricao: str = Field(..., description="Descrição das principais intenções deste tema")
-    percentagem: float = Field(..., description="Valor total percentual de feedbacks que se inserem neste tema.")
-    total: int = Field(..., description="Contagem total de feedbacks que se inserem neste tema.")
-
-
-class MonthlyReport(BaseModel):
-    analise: List[AnaliseItem] = Field(..., description="Lista de temas de análise")
-    sugestoes_de_melhoria_dos_clientes: List[str] = Field(..., description="Lista de sugestões de melhoria dos clientes")
-    propostas_de_melhoria_AI: List[str] = Field(..., description="Lista de propostas de melhoria")
-
-
-class InputReport(BaseModel):
-    year: int
-    month: int
-    delete_report: bool = False
-
+class ListFeedbackClassification(BaseModel):
+    list: List[FeedbackClassification]
 
 def connect_to_collection(conn_str, db_name, collection_name, create_collection=False):
     try:
         client = MongoClient(conn_str)
         db = client[db_name]
-
         if not collection_name in db.list_collection_names() and not create_collection:
             raise ValueError(f"Collection '{collection_name}' does not exist.")
-
         collection = db[collection_name]
         return db, collection, client
     except Exception as e:
-        e.add_note(f"MongoDB connection error: {e}")
-        raise
-
+        raise Exception(f"MongoDB connection error: {e}")
 
 def insert_data(collection, data: List[Dict] | Dict):
     try:
@@ -117,32 +70,17 @@ def insert_data(collection, data: List[Dict] | Dict):
             return [str(res) for res in result.inserted_ids]
         else:
             result = collection.insert_one(data)
-            return str(result.inserted_id)
+            return [str(result.inserted_id)]
     except Exception as e:
-        e.add_note(f"Error inserting data: {e}")
-        raise
-
+        raise Exception(f"Error inserting data: {e}")
 
 def delete_data_between_dates(collection, start_date, end_date, date_field):
-
     try:
-        if not (isinstance(start_date, datetime) and isinstance(start_date, datetime)) :
-            raise ValueError("start_date + delta 1 must be earlier than end_date.")
-
-        if start_date + timedelta(days=1) >= end_date:
-            raise ValueError("start_date + delta 1 must be earlier than end_date.")
-        
-        query = {
-            date_field: {"$gt": start_date, "$lt": end_date}
-        }
-
+        query = {date_field: {"$gt": start_date, "$lt": end_date}}
         result = collection.delete_many(query)
         return result.deleted_count
-        
     except Exception as e:
-        e.add_note(f"An error occurred when deleting data: {e}")
-        raise
-
+        raise Exception(f"Error deleting data between dates: {e}")
 
 def get_data_between_dates(collection, start_date, end_date, date_field):
 
@@ -158,12 +96,25 @@ def get_data_between_dates(collection, start_date, end_date, date_field):
         }
 
         result = collection.find(query)
-        return result.deleted_count
+        return result
         
     except Exception as e:
         e.add_note(f"An error occurred when deleting data: {e}")
         raise
 
+def get_classifications_as_string(collection: str) -> str:
+    try:
+        # Query all documents in the collection
+        documents = collection.find({}, {"classifications": 1, "_id": 0})
+
+        # Extract 'classifications' field and create a newline-separated string
+        classifications_list = [doc["classifications"] for doc in documents if "classifications" in doc]
+        classifications_string = "\n".join(classifications_list)
+
+        return classifications_string
+
+    except Exception as e:
+        raise Exception(f"Error retrieving classifications: {e}")
 
 def get_data_by_year_month(collection, year, month, date_field, project):
     try:
