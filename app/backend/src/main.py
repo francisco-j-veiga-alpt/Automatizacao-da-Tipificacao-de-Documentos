@@ -58,7 +58,7 @@ async def feedback_state():
 @feedback_router.post("/process/{source}", status_code=status.HTTP_201_CREATED)
 async def process_sources(params: Union[InputProcessBase, InputProcessPortalDaQueixa], source: str):
     try:
-        db, collection, client = connect_to_collection(uri_feedback, db_feedback, db_collection_customers_feedback, create_collection=True)
+        db, collection, client = connect_to_collection(uri_feedback, db_feedback, db_collection_customers_feedback)
 
         # Fetch data based on source type
         if source == portal_da_queixa and isinstance(params, InputProcessPortalDaQueixa):
