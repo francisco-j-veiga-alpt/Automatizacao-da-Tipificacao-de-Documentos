@@ -5,10 +5,12 @@ from langchain_ollama import OllamaLLM
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 from langchain.output_parsers import PydanticOutputParser
-from src.conn_utils.mongo_conn import FeedbackClassification, ListFeedback, ListFeedbackClassification # Assuming mongo_conn defines these
+# Ensure FeedbackClassification includes needs_review=False
+from src.conn_utils.mongo_conn import FeedbackClassification, ListFeedback, ListFeedbackClassification
 from langchain_openai.chat_models.azure import AzureChatOpenAI
-from typing import List
+from typing import List, Set
 
+# get_llm_model remains the same as the previous version
 def get_llm_model():
     use_cloud_llm = int(os.environ.get("USE_CLOUD_LLM", 0)) # Default to 0 (Ollama) if not set
     # Recommendation: Set ARG_TEMPERATURE low (e.g., 0.1 or 0.2) for consistent classification
@@ -28,10 +30,11 @@ def get_llm_model():
             azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
             api_key = os.getenv("AZURE_OPENAI_API_KEY")
             api_version = os.getenv("OPENAI_API_VERSION")
-            if not all([azure_endpoint, api_key, api_version]):
-                raise ValueError("Azure OpenAI environment variables (ENDPOINT, API_KEY, API_VERSION) not fully set.")
+            deployment_name = os.getenv("AZURE_DEPLOYMENT_NAME", "gpt-4o") # Get deployment name
+            if not all([azure_endpoint, api_key, api_version, deployment_name]):
+                raise ValueError("Azure OpenAI environment variables (ENDPOINT, API_KEY, API_VERSION, DEPLOYMENT_NAME) not fully set.")
             return AzureChatOpenAI(
-                deployment_name=os.getenv("AZURE_DEPLOYMENT_NAME", "gpt-4o"), # Default or specify deployment
+                deployment_name=deployment_name,
                 azure_endpoint=azure_endpoint,
                 openai_api_key=api_key,
                 api_version=api_version,
@@ -41,39 +44,33 @@ def get_llm_model():
             ollama_model = os.environ.get("OLLAMA_MODEL_NAME")
             if not ollama_model:
                  raise ValueError("OLLAMA_MODEL_NAME environment variable not set for Ollama.")
-            # Note: Ollama temperature might behave differently. Test for optimal results.
             return OllamaLLM(model=ollama_model, temperature=temperature, timeout=timeout)
     except Exception as e:
-        e.add_note(f"Error getting LLM model: {e}")
-        raise
+        # add_note is deprecated
+        raise Exception(f"Error getting LLM model: {e}")
 
 
+# llm_prompt_chain remains the same
 def llm_prompt_chain(pydantic_object, template, input_variables):
     try:
-
         llm = get_llm_model()
-
         parser = PydanticOutputParser(pydantic_object=pydantic_object)
-
         prompt = PromptTemplate(
             template=template,
             input_variables=input_variables,
             partial_variables={"format_instructions": parser.get_format_instructions()},
         )
-
-        # Ensure the chain is properly constructed: prompt -> llm -> parser
         chain = prompt | llm | parser
-
         return chain
     except Exception as e:
-        e.add_note(f"Error creating LLM prompt chain: {e}")
-        raise
+        # add_note is deprecated
+        raise Exception(f"Error creating LLM prompt chain: {e}")
 
 
 def feedback_classifier_generic():
-    # Updated prompt with few-shot examples and refined instructions
+    # Updated prompt asking for needs_review flag
     template = """
-    Tu és um assistente de IA altamente preciso, especializado em análise e classificação de feedback de clientes em Português de Portugal. A tua tarefa é processar os feedbacks fornecidos e extrair informações específicas estritamente no formato JSON solicitado. Responde exclusivamente em Português de Portugal.
+    Tu és um assistente de IA altamente preciso, especializado em análise e classificação de feedback de clientes em Português de Portugal. A tua tarefa é processar os feedbacks fornecidos e extrair informações específicas estritamente no formato JSON solicitado, indicando se a classificação requer revisão. Responde exclusivamente em Português de Portugal.
 
     **Objetivo:** Para cada feedback, analisa o conteúdo e preenche a seguinte estrutura JSON:
 
@@ -81,7 +78,8 @@ def feedback_classifier_generic():
     {{
     "classification": "...", // Classificação *exata* retirada da lista abaixo. NÃO inventar ou modificar.
     "sentiment": "...",      // Sentimento expresso ('Neutral', 'Negative', 'Very Negative').
-    "feedback_summary": "..." // Resumo conciso do feedback em Português de Portugal.
+    "feedback_summary": "...", // Resumo conciso do feedback em Português de Portugal.
+    "needs_review": ...      // true se estiveres incerto sobre a classificação OU se o feedback for muito ambíguo, nulo ou dados invalidos, caso contrário false.
     }}
     ```
 
@@ -89,14 +87,20 @@ def feedback_classifier_generic():
     1.  **Leitura:** Lê atentamente cada feedback individualmente.
     2.  **Análise e Preenchimento JSON:**
         * **sentiment:** Determina o sentimento geral. Escolhe OBRIGATORIAMENTE um dos seguintes: 'Neutral', 'Negative', 'Very Negative'.
-        * **feedback_summary:** Cria um resumo muito conciso do ponto principal e sugestões dos clientes. Em Português de Portugal.
+        * **feedback_summary:** Cria um resumo muito conciso do ponto principal e sugestões. Em Português de Portugal.
         * **classification:** Esta é a parte mais crítica. Segue estas regras ABSOLUTAS:
-            * Analisa o tema principal do feedback (refletido no teu resumo).
-            * Compara esse tema com a lista de classificações fornecida abaixo (entre "----INICIO CLASSIFICAÇÕES----" e "---FIM CLASSIFICAÇÕES----").
-            * Seleciona EXATAMENTE UMA classificação da lista. COPIA A LINHA COMPLETA da classificação escolhida, incluindo '>' se houver.
+            * Analisa o tema principal do feedback.
+            * Compara esse tema com a lista de classificações fornecida abaixo.
+            * Seleciona EXATAMENTE UMA classificação da lista. COPIA A LINHA COMPLETA.
             * **NÃO MODIFIQUES, NÃO ABREVIEES, NÃO INVENTES, NÃO COMBINES classificações.** A classificação no JSON *tem* de corresponder *literalmente* a uma linha da lista.
             * Se vários temas estiverem presentes, foca-te no tema *principal* ou no mais *negativo*.
-            * **Se tiveres dúvidas ou nenhum item da lista parecer adequado, escolhe a classificação que considerares MAIS PRÓXIMA.** Nunca deixes o campo vazio ou inventes uma categoria.
+            * Se tiveres dúvidas significativas sobre qual categoria escolher, ou se o feedback for extremamente vago ou confuso, escolhe a classificação que considerares MAIS PRÓXIMA e define "needs_review" como true. Se nenhuma for minimamente próxima, podes usar uma categoria genérica como "Outros" e define "needs_review" como true.
+        * **needs_review:** Define como `true` se:
+            * Tiveste dificuldade em escolher a classificação exata.
+            * O feedback é muito ambíguo, contraditório ou pouco claro.
+            * Escolheste uma categoria genérica por falta de opção específica.
+            * Em caso de dados inválidos, ou nulos.
+            Define como `false` se tens alta confiança na classificação escolhida.
 
     **Lista Obrigatória de Classificações (Usar EXATAMENTE como escrito):**
     ----INICIO CLASSIFICAÇÕES----
@@ -112,7 +116,8 @@ def feedback_classifier_generic():
     {{
     "classification": "Avaria>Demora",
     "sentiment": "Very Negative",
-    "feedback_summary": "Cliente reporta falhas constantes na internet e demora na resolução do apoio técnico."
+    "feedback_summary": "Cliente reporta falhas constantes na internet e demora na resolução do apoio técnico.",
+    "needs_review": false
     }}
     ```
 
@@ -123,7 +128,8 @@ def feedback_classifier_generic():
     {{
     "classification": "Atendimento>Loja",
     "sentiment": "Very Negative",
-    "feedback_summary": "Cliente muito insatisfeito com o atendimento na loja MEO Colombo."
+    "feedback_summary": "Cliente muito insatisfeito com o atendimento na loja MEO Colombo.",
+    "needs_review": false
     }}
     ```
 
@@ -134,7 +140,32 @@ def feedback_classifier_generic():
     {{
     "classification": "Facturação e saldos>Comunicações>Suspeita de fraude",
     "sentiment": "Very Negative",
-    "feedback_summary": "Cliente relata burla através de falsas subscrições do serviço "Cozinha Fácil". Pretende ressarcimento e considera fazer queixa ao MP devido à fraude sistemática."
+    "feedback_summary": "Cliente relata burla através de falsas subscrições do serviço "Cozinha Fácil". Pretende ressarcimento e considera fazer queixa ao MP devido à fraude sistemática.",
+    "needs_review": false
+    }}
+    ```
+
+    *Exemplo 4:*
+    Feedback: ""
+    JSON Esperado:
+    ```json
+    {{
+    "classification": "Outros",
+    "sentiment": None,
+    "feedback_summary": None",
+    "needs_review": true
+    }}
+    ```
+
+    *Exemplo 5:*
+    Feedback: "Nada"
+    JSON Esperado:
+    ```json
+    {{
+    "classification": "Outros",
+    "sentiment": None,
+    "feedback_summary": None",
+    "needs_review": true
     }}
     ```
 
@@ -144,58 +175,89 @@ def feedback_classifier_generic():
     **Instruções de Formato Adicionais (Obrigatório seguir):**
     {format_instructions}
     """
-    # Ensure the Pydantic object matches the expected JSON structure list
+    # Ensure ListFeedbackClassification's Pydantic definition matches the JSON with needs_review
     return llm_prompt_chain(ListFeedbackClassification, template, ["feedbacks", "classifications"])
 
 
-def process_feedback_generic(chain, feedback_list: ListFeedback, classifications: str, batch_size: int = 10):
-    # Note: Changed classifications type hint to str as get_classifications_as_string returns a string
-    processed_feedback = []
+# Modified to check classification validity and set needs_review
+def process_feedback_generic(chain, feedback_list: ListFeedback, classifications: str, batch_size: int = 10) -> ListFeedbackClassification:
+    processed_feedback_list = []
     total_feedbacks = len(feedback_list.list)
+
+    # Create a set of valid classifications for efficient lookup
+    valid_classifications_set: Set[str] = set(classifications.strip().split('\n'))
+    if not valid_classifications_set or (len(valid_classifications_set) == 1 and '' in valid_classifications_set):
+         raise ValueError("Valid classifications set is empty. Check database query or content.")
+
 
     for i in range(0, total_feedbacks, batch_size):
         batch = feedback_list.list[i:min(i + batch_size, total_feedbacks)]
-        # Convert batch items to a simple string representation suitable for the prompt if needed,
-        # or ensure the __str__ or __repr__ method of Feedback model is appropriate.
-        # Assuming the model objects in 'batch' can be directly used in the prompt formatting.
-        # If models are complex, you might need to format them as simple strings here.
-        batch_for_prompt = "\n---\n".join([f"Feedback ID {idx+i}: {fb.feedback_full_text}" for idx, fb in enumerate(batch)])
+        # Prepare batch for prompt (assuming Feedback model has appropriate string representation)
+        # Simple example: Join texts. Adjust if Feedback objects need specific formatting.
+        batch_texts = [str(fb) for fb in batch]
+        # Consider adding identifiers if needed by the prompt or for debugging
+        #batch_for_prompt = "\n---\n".join([f"ID_{idx+i}: {text}" for idx, text in enumerate(batch_texts)])
+        batch_for_prompt = "\n---\n".join(batch_texts) # Simpler version
+
+
+        if not batch_for_prompt:
+             print(f"Skipping empty batch starting at index {i}")
+             continue
 
 
         try:
-            # Ensure classifications is passed as a single string as expected by the prompt
-            outputs = chain.invoke({
-                "feedbacks": batch_for_prompt, # Pass the formatted string batch
+            # Invoke LLM chain
+            outputs: ListFeedbackClassification = chain.invoke({
+                "feedbacks": batch_for_prompt,
                 "classifications": classifications # Pass the single classifications string
             })
 
-            # Important: Match the LLM output structure back to your original batch items.
-            # The current Pydantic parser expects a list matching the structure.
-            # If the LLM returns one JSON blob containing a list, this works.
-            # If the LLM returns multiple JSON objects, the parser might fail or need adjustment.
-            # We need to map the 'outputs.list' back to the original 'batch' items.
-            # Assuming the LLM output list corresponds positionally to the input batch.
+            # Post-processing and validation
             if len(outputs.list) == len(batch):
-                 for original_feedback, classification_output in zip(batch, outputs.list):
-                     # Merge original data with LLM output
-                     # Create a new FeedbackClassification object or update original_feedback if mutable
-                     merged_data = original_feedback.model_dump() # Get original data
-                     merged_data.update(classification_output.model_dump(exclude_unset=True)) # Update with LLM classification output
-                     try:
-                         processed_item = FeedbackClassification(**merged_data)
-                         processed_feedback.append(processed_item)
-                     except Exception as validation_error:
-                         print(f"Validation Error merging feedback: {validation_error}. Data: {merged_data}")
-                         # Optionally handle error: skip item, add default classification, etc.
+                 for llm_output in outputs.list:
+                     
+                     llm_output = llm_output.model_dump()
+                     
+                     # --- Classification Validation ---
+                     llm_classification = llm_output["classification"]
+                     is_valid_classification = llm_classification in valid_classifications_set
+
+                     # Determine final needs_review status
+                     # Mark for review if LLM flagged it OR if classification is invalid/missing
+                     final_needs_review = llm_output["needs_review"] or not is_valid_classification or llm_classification is None
+
+                     if not is_valid_classification and llm_classification is not None:
+                         print(f"Warning: LLM returned invalid classification '{llm_classification}' for feedback ID {llm_output.get('user_id', 'N/A')}")
+                     elif llm_classification is None:
+                          print(f"Warning: LLM failed to provide classification for feedback ID {llm_output.get('user_id', 'N/A')}. Marking for review.")
+
+                     llm_output.update({"needs_review": final_needs_review})
+
+                     processed_feedback_list.append(FeedbackClassification(**llm_output))
+
             else:
-                print(f"Warning: Mismatch between batch size ({len(batch)}) and LLM output size ({len(outputs.list)}) for batch starting at index {i}.")
-                # Handle mismatch: log error, skip batch, etc.
+                print(f"Warning: Mismatch between input batch size ({len(batch)}) and LLM output size ({len(outputs.list)}) for batch starting at index {i}. Skipping batch.")
+                # Log details of the batch and output for debugging
 
 
         except Exception as e:
             print(f"Error processing batch starting at index {i}: {e}")
-            # Decide how to handle batch errors: skip, retry, partial save?
-            # Adding a sleep might help with rate limits if that's the cause
-            #sleep(1) # Simple retry delay, adjust as needed
+            # Mark all items in this failed batch as needing review?
+            for original_feedback in batch:
+                 error_data = original_feedback.model_dump()
+                 error_data.update({
+                     "feedback_summary": f"Error during processing: {e}",
+                     "classification": "None",
+                     "sentiment": "None",
+                     "needs_review": True
+                 })
+                 try:
+                      processed_item = FeedbackClassification(**error_data)
+                      processed_feedback_list.append(processed_item)
+                 except Exception as validation_error:
+                      print(f"Validation Error creating error feedback object: {validation_error}. Data: {error_data}")
 
-    return ListFeedbackClassification(list=processed_feedback)
+            sleep(1) # Simple retry delay
+
+    # Return a single list containing all processed items, flagged as needed
+    return ListFeedbackClassification(list=processed_feedback_list)
