@@ -188,13 +188,37 @@ def process_feedback_generic(chain, feedback_list: ListFeedback, classifications
     valid_classifications_set: Set[str] = set(classifications.strip().split('\n'))
     if not valid_classifications_set or (len(valid_classifications_set) == 1 and '' in valid_classifications_set):
          raise ValueError("Valid classifications set is empty. Check database query or content.")
+    
+    def clean_text(text):
+        import re
+        """
+        Cleans the input text by:
+        - Replacing non-breaking spaces and zero-width spaces.
+        - Handling both raw and escaped representations of problematic characters.
+        """
+        # Replace literal non-breaking space (\xa0) with a regular space
+        text = text.replace("\xa0", " ")
+        
+        # Replace literal zero-width space (\u200b) with nothing
+        text = text.replace("\u200b", "")
+        
+        # Handle escaped versions of these characters (e.g., "\\xa0" or "\\u200b")
+        text = text.replace("\\xa0", " ").replace("\\u200b", "")
+        
+        # Optionally, remove other control characters (e.g., ASCII 0-31 except \n and \t)
+        #text = re.sub(r"[\x00-\x1F\x7F-\x9F]", "", text)
+
+        text = text.replace("\x80", "€")
+        
+        # Strip leading/trailing whitespace
+        return text.strip()
 
 
     for i in range(0, total_feedbacks, batch_size):
         batch = feedback_list.list[i:min(i + batch_size, total_feedbacks)]
         # Prepare batch for prompt (assuming Feedback model has appropriate string representation)
         # Simple example: Join texts. Adjust if Feedback objects need specific formatting.
-        batch_texts = [str(fb) for fb in batch]
+        batch_texts = [clean_text(str(fb)) for fb in batch]
         # Consider adding identifiers if needed by the prompt or for debugging
         #batch_for_prompt = "\n---\n".join([f"ID_{idx+i}: {text}" for idx, text in enumerate(batch_texts)])
         batch_for_prompt = "\n---\n".join(batch_texts) # Simpler version
@@ -261,3 +285,4 @@ def process_feedback_generic(chain, feedback_list: ListFeedback, classifications
 
     # Return a single list containing all processed items, flagged as needed
     return ListFeedbackClassification(list=processed_feedback_list)
+
