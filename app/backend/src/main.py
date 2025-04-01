@@ -19,7 +19,7 @@ db_collection_qualtrics_chatbot_reports = os.environ.get("MONGO_COLLECTION_QUALT
 db_collection_cliente_misterio = os.environ.get("MONGO_COLLECTION_CLIENTE_MISTERIO")
 db_collection_cliente_misterio_reports = os.environ.get("MONGO_COLLECTION_CLIENTE_MISTERIO_REPORTS")
 db_collection_classifications = os.environ.get("MONGO_COLLECTION_CLASSIFICATIONS")
-db_collection_customers_feedback = os.environ.get("MONGO_COLLECTION_CUSTOMERS_FEEDBACK")
+db_collection_customers_feedback = os.environ.get("MONGO_COLLECTION_CUSTOMER_FEEDBACK")
 
 uri_feedback = f"mongodb://{db_user}:{db_password}@{db_host}/{db_feedback}"
 
