@@ -1,7 +1,7 @@
 # src/conn_utils/mongo_conn.py
 from pymongo import MongoClient
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any # Added Optional and Any
 from datetime import timedelta, datetime, time, date
 import calendar # Added for potential use elsewhere, keep if needed
 
@@ -38,7 +38,7 @@ class Feedback(BaseModel):
 class FeedbackClassification(Feedback):
     feedback_summary: str = Field(description="Summary of the feedback in Portuguese")
     classification: str = Field(description="Main classification of the feedback")
-    sentiment: str = Field(description="Sentiment expressed in the feedback ('Very Positive', 'Positive', 'Very Negative', 'Negative', or 'Neutral').")
+    sentiment: str = Field(description="Sentiment expressed in the feedback ('Very Negative', 'Negative', or 'Neutral').")
     needs_review: bool = Field(False, description="Flag indicating if the classification is uncertain or needs manual review.")
 
     @field_validator("sentiment")
@@ -53,6 +53,44 @@ class ListFeedback(BaseModel):
 
 class ListFeedbackClassification(BaseModel):
     list: List[FeedbackClassification]
+
+
+
+# --- New Model for Questionnaire Feedback Sentiment Analysis ---
+
+class FeedbackQuestionnaire(BaseModel):
+    """
+    Model representing the structure of a single customer feedback entry
+    originating from a post-case handling questionnaire, used specifically
+    for sentiment analysis.
+    """
+    date: datetime = Field(description="The exact date when the feedback questionnaire was submitted.")
+    id_source: str = Field(description="Unique identifier for the feedback entry, often from the source system (e.g., CRM ticket ID related to the original case).")
+    source: str = Field(description="The origin or platform from which the questionnaire feedback was collected (e.g., 'Qualtrics', 'SurveyMonkey').")
+    crm_classification: str = Field(description="The classification assigned to the original case/ticket in the CRM system that this questionnaire feedback relates to.")
+    feedback: str = Field(description="The verbatim text of the customer's answer to the open-ended question in the questionnaire, specifically 'O que podera a MEO fazer para melhorar o atendimento?'.")
+
+
+class FeedbackQuestionnaireSentiment(FeedbackQuestionnaire):
+    # Corrected: Changed str to Optional[str]
+    sentiment: Optional[str] = Field(description="Sentiment: 'Very Negative', 'Negative', 'Neutral', or null.")
+
+    @field_validator("sentiment")
+    def sentiment_must_be_valid(cls, value):
+        # This validator already correctly handles None, so no change needed here.
+        allowed_sentiments = {'Very Negative', 'Negative', 'Neutral', None}
+        if value not in allowed_sentiments:
+            print(f"Warning: Unexpected sentiment value '{value}' received.")
+            # Depending on strictness, you might raise ValueError here
+        return value
+
+class ListFeedbackQuestionnaireSentiment(BaseModel):
+    list: List[FeedbackQuestionnaireSentiment]
+
+class ListFeedbackQuestionnaire(BaseModel):
+    list: List[FeedbackQuestionnaire]
+
+
 
 # --- Database Connection and Operations ---
 
@@ -269,3 +307,211 @@ def get_collection_unique_timestamps(collection, date_field_name="date", format_
     except Exception as e:
         # Add note is deprecated
         raise Exception(f"An error occurred getting collection unique timestamps: {e}")
+
+
+
+def retrieve_grouped_sentiment_counts(
+    collection,
+    year: int,
+    month: int,
+    group_by_column: str = "classification",
+    sentiment_column: str = "sentiment",
+    group_level: Optional[int] = None, # Parameter for level selection
+    filter_by_columns: Optional[Dict] = None,
+    date_field: str = "date"
+):
+    """
+    Retrieves data from MongoDB for a specific year and month, providing a
+    per-group sentiment breakdown (with total count per group), an overall
+    total sentiment count, and the query date string ("YYYY/MM").
+    Allows grouping by a specific hierarchy level path.
+
+    Args:
+        collection: The pymongo collection object.
+        year: The year to filter by.
+        month: The month to filter by (1-12).
+        group_by_column: The hierarchical field name for grouping.
+        sentiment_column: The field name containing the sentiment values.
+        group_level: Optional integer specifying the hierarchy level (1-based) path
+                     to group by. If None or <= 0, groups by the full field value.
+                     If the level is deeper than available, groups by the full available path.
+        filter_by_columns: Optional dictionary of additional key-value pairs to filter by.
+        date_field: The name of the field containing date information. Defaults to 'date'.
+
+    Returns:
+        A dictionary containing:
+        - 'query_date': String representing the query period ("YYYY/MM").
+        - 'total_sentiment': Overall sentiment counts.
+        - 'grouping_summary': List of dictionaries, each with a 'grouping_value',
+                              'group_total_count', and non-zero 'sentiment_counts_total'.
+        Returns None if an error occurs or a default structure if no data matches.
+    """
+    try:
+        if not (1 <= month <= 12):
+            raise ValueError("Month must be between 1 and 12.")
+
+        # Construct the query date string (YYYY/MM)
+        query_date_str = f"{year}/{month:02d}"
+
+        # Calculate start and end dates
+        start_date = datetime(year, month, 1, 0, 0, 0)
+        _, last_day = calendar.monthrange(year, month)
+        end_date = datetime(year, month, last_day, 23, 59, 59, 999999)
+
+        # --- Common Setup ---
+        match_criteria = {
+            date_field: {'$gte': start_date, '$lte': end_date},
+            group_by_column: { '$exists': True, '$type': "string" }
+        }
+        if filter_by_columns:
+            match_criteria.update(filter_by_columns)
+
+        expected_sentiments = ['Very Negative', 'Negative', 'Neutral']
+
+        # Helper to create sentiment sum expressions
+        def create_sentiment_sums(prefix=""):
+            sums = {}
+            for sentiment_value in expected_sentiments:
+                field_key = f"{prefix}count_{sentiment_value.replace(' ', '_')}"
+                sums[field_key] = {
+                    '$sum': {
+                        '$cond': [{'$eq': [f'${sentiment_column}', sentiment_value]}, 1, 0]
+                    }
+                }
+            return sums
+
+        # --- Logic to Calculate Grouping Key (Path) Based on Level ---
+        calculate_grouping_key_stage = {
+            # ... (same $addFields logic as previous version) ...
+             '$addFields': {
+                'grouping_key': {
+                    '$let': {
+                        'vars': {
+                            'full_key': f'${group_by_column}',
+                            'levels': {'$split': [f'${group_by_column}', '>']},
+                            'requested_level': group_level if group_level and group_level > 0 else 0
+                        },
+                        'in': {
+                            '$cond': [
+                                {'$gt': ['$$requested_level', 0]},
+                                { # Level grouping requested
+                                    '$let': {
+                                        'vars': {
+                                            'slice_count': { '$min': ['$$requested_level', {'$size': '$$levels'}] }
+                                        },
+                                        'in': {
+                                            '$reduce': {
+                                                'input': {'$slice': ['$$levels', '$$slice_count']},
+                                                'initialValue': "",
+                                                'in': {
+                                                    '$cond': [ {'$eq': ['$$value', '']}, '$$this', {'$concat': ['$$value', '>', '$$this']} ]
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                '$$full_key' # No level grouping requested
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+
+
+        # --- Facet 1: Per Group Breakdown (Added group_total_count) ---
+        classification_pipeline = [
+            calculate_grouping_key_stage, # Calculate the key first
+            {
+                '$group': {
+                    '_id': '$grouping_key', # Group by the calculated path
+                    **create_sentiment_sums(),
+                    # --- Add total count for the group ---
+                    'group_total_count': { '$sum': 1 }
+                    # -------------------------------------
+                }
+            },
+            { # Project to reshape
+                '$project': {
+                    '_id': 0,
+                    'grouping_value': '$_id', # Output the calculated path
+                    # --- Include the group total count ---
+                    'group_total_count': '$group_total_count',
+                    # -----------------------------------
+                    'sentiment_counts_total': {
+                        '$arrayToObject': {
+                            '$filter': {
+                                'input': [
+                                    {'k': sv, 'v': f"$count_{sv.replace(' ', '_')}"} for sv in expected_sentiments
+                                ],
+                                'as': 'pair',
+                                'cond': {'$gt': ['$$pair.v', 0]}
+                            }
+                        }
+                    }
+                }
+            },
+            { # Remove groups where sentiment_counts_total is empty (optional, keeps groups with only 0 counts otherwise)
+                '$match': {
+                    'sentiment_counts_total': {'$ne': {}}
+                }
+            },
+            { # Sort by the grouping value path
+                '$sort': { 'grouping_value': 1 }
+            }
+        ]
+
+        # --- Facet 2: Overall Totals (remains the same) ---
+        overall_total_pipeline = [
+             # ... (same as previous version) ...
+             { '$group': { '_id': None, **create_sentiment_sums(prefix="total_") } },
+             { '$project': { '_id': 0, 'total_sentiment': { sv: f"$total_count_{sv.replace(' ', '_')}" for sv in expected_sentiments } } }
+        ]
+
+        # --- Main Aggregation Pipeline with $facet ---
+        pipeline = [
+            { '$match': match_criteria },
+            { '$facet': { 'grouping_summary': classification_pipeline, 'overall_totals_temp': overall_total_pipeline } },
+            { # Reshape the $facet output
+                '$project': {
+                    '_id': 0,
+                    'grouping_summary': '$grouping_summary',
+                    'total_sentiment': {
+                        '$ifNull': [
+                             { '$arrayElemAt': ['$overall_totals_temp.total_sentiment', 0] },
+                             { sentiment_value: 0 for sentiment_value in expected_sentiments }
+                        ]
+                    }
+                }
+            }
+        ]
+
+        # Execute the pipeline
+        results = list(collection.aggregate(pipeline))
+
+        # Default result structure
+        default_result = {
+            'query_date': query_date_str,
+            'total_sentiment': { sentiment_value: 0 for sentiment_value in expected_sentiments },
+            'grouping_summary': []
+        }
+
+        if results:
+            final_result = results[0]
+            final_result['query_date'] = query_date_str
+            # Return potentially reordered keys
+            return {
+                'query_date': final_result.get('query_date'),
+                'total_sentiment': final_result.get('total_sentiment', default_result['total_sentiment']),
+                'grouping_summary': final_result.get('grouping_summary', default_result['grouping_summary'])
+            }
+        else:
+             return default_result
+
+
+    except ValueError as ve:
+        print(f"Input validation error: {ve}")
+        return None
+    except Exception as e:
+        print(f"An error occurred during aggregation: {e}")
+        return None

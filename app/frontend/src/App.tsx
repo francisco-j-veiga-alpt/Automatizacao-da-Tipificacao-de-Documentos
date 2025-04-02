@@ -2,21 +2,19 @@
 
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import Dashboard from './pages/Dashboard';
 import PortalDaQeixa from './pages/PortalDaQeixa';
-import QualtricsChatbot from './pages/QualtricsChatbot';
 import NavBar from './components/NavBar';
-import ClienteMisterio from './pages/ClienteMisterio';
 
 const App: React.FC = () => {
   return (
     <Router>
       <NavBar />
       <Routes>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/portal-da-queixa" element={<PortalDaQeixa />} />
+        {/* <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/qualtrics-chatbot" element={<QualtricsChatbot />} />
-        <Route path="/cliente-misterio" element={<ClienteMisterio />} />
+        <Route path="/cliente-misterio" element={<ClienteMisterio />} /> */}
+
+        <Route path="/portal-da-queixa" element={<PortalDaQeixa />} />
       </Routes>
     </Router>
   );

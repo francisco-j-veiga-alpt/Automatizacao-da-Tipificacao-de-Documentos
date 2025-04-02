@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { SentimentSummaryResponse } from '../types/summaryTypes';
 
 // Fetch dashboard data for the last N months
 export const fetchDashboardData = async (numLastMonths: number) => {
@@ -104,5 +105,66 @@ export const uploadFileToApi = async (
   } catch (error) {
     console.error('Failed to upload file:', error);
     throw error;
+  }
+};
+
+
+
+export const fetchSentimentSummary = async (
+  collectionName: string,
+  year: number,
+  month: number,
+  groupLevel?: number | null,
+  groupByColumn?: string,
+  sentimentColumn?: string,
+  dateField?: string,
+  filtersJson?: string | null // Accepts the pre-formatted JSON string for filters
+): Promise<SentimentSummaryResponse> => {
+
+  // Construct query parameters dynamically
+  const params = new URLSearchParams({
+    year: String(year),
+    month: String(month),
+  });
+  if (groupLevel !== undefined && groupLevel !== null) {
+    params.append('group_level', String(groupLevel));
+  }
+  // Pass the filters_json string directly if provided
+  if (filtersJson) {
+      params.append('filters_json', filtersJson);
+  }
+   if (groupByColumn) {
+    params.append('group_by_column', groupByColumn);
+  }
+  if (sentimentColumn) {
+    params.append('sentiment_column', sentimentColumn);
+  }
+   if (dateField) {
+    params.append('date_field', dateField);
+  }
+
+  // Log the request being sent
+  console.log(`API Request: GET /feedback/summary/${collectionName}`, params.toString());
+
+  try {
+    const response = await axios.get(
+      // Ensure your backend API base URL is correct (e.g., http://localhost:8000)
+      `http://localhost:8000/feedback/summary/${collectionName}`, // Using relative path assumes proxy or same origin
+      { params }
+    );
+    // Log the raw response data
+    console.log(`Raw Response Data for ${collectionName}:`, response.data);
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching sentiment summary for ${collectionName}:`, error);
+    if (axios.isAxiosError(error) && error.response) {
+       // Log detailed error response if available
+       console.error("API Error Response:", error.response.data);
+       throw new Error(`API Error (${error.response.status}): ${error.response.data?.detail || error.message}`);
+    } else if (error instanceof Error) {
+       throw new Error(`Failed to fetch sentiment summary: ${error.message}`);
+    } else {
+       throw new Error('Failed to fetch sentiment summary due to an unknown error');
+    }
   }
 };

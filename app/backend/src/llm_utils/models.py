@@ -5,10 +5,11 @@ from langchain_ollama import OllamaLLM
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 from langchain.output_parsers import PydanticOutputParser
+from pydantic import ValidationError
 # Ensure FeedbackClassification includes needs_review=False
-from src.conn_utils.mongo_conn import FeedbackClassification, ListFeedback, ListFeedbackClassification
+from src.conn_utils.mongo_conn import FeedbackClassification, FeedbackQuestionnaireSentiment, ListFeedback, ListFeedbackClassification, ListFeedbackQuestionnaire, ListFeedbackQuestionnaireSentiment
 from langchain_openai.chat_models.azure import AzureChatOpenAI
-from typing import List, Set
+from typing import List, Set, Optional, Dict, Any # Added Optional, Dict, Any
 
 # get_llm_model remains the same as the previous version
 def get_llm_model():
@@ -152,7 +153,7 @@ def feedback_classifier_generic():
     {{
     "classification": "Outros",
     "sentiment": None,
-    "feedback_summary": None",
+    "feedback_summary": None,
     "needs_review": true
     }}
     ```
@@ -164,7 +165,7 @@ def feedback_classifier_generic():
     {{
     "classification": "Outros",
     "sentiment": None,
-    "feedback_summary": None",
+    "feedback_summary": None,
     "needs_review": true
     }}
     ```
@@ -286,3 +287,205 @@ def process_feedback_generic(chain, feedback_list: ListFeedback, classifications
     # Return a single list containing all processed items, flagged as needed
     return ListFeedbackClassification(list=processed_feedback_list)
 
+
+# --- New Sentiment Analysis Functions ---
+
+def feedback_sentiment_analyzer():
+    """
+    Creates an LLM chain specifically for sentiment analysis based on the user's requirements.
+    Includes few-shot examples for invalid feedback handling.
+    """
+
+    template = """
+    Tu és um assistente de IA preciso, especializado em análise de sentimento de feedback de clientes em Português de Portugal, especificamente para a questão "O que podera a MEO fazer para melhorar o atendimento?". A tua tarefa é determinar o sentimento expresso no feedback.
+
+    **Objetivo:** Para cada feedback, analisa o conteúdo e determina o sentimento, respondendo estritamente no formato JSON solicitado.
+
+    **Formato JSON de Saída Esperado (para cada feedback):**
+
+    ```json
+    {{
+      "sentiment": "..." // Deve ser 'Very Negative', 'Negative', 'Neutral', ou null (literalmente a palavra null, não a string "null")
+    }}
+    ```
+
+    **Instruções Detalhadas:**
+    1.  **Leitura:** Lê atentamente cada feedback individualmente. O feedback responde à pergunta: "O que podera a MEO fazer para melhorar o atendimento?".
+    2.  **Análise de Sentimento:**
+        * Avalia se o feedback expressa uma opinião muito negativa, negativa ou neutra sobre a melhoria do atendimento.
+        * **'Very Negative':** Indica insatisfação extrema, críticas fortes, problemas graves ou sugestões dadas de forma muito negativa.
+        * **'Negative':** Indica insatisfação, críticas, problemas ou sugestões dadas de forma negativa.
+        * **'Neutral':** Indica uma declaração objetiva, sem carga emocional clara, ou um comentário que não expressa uma opinião direta sobre a melhoria (ex: "Não sei", "Não tenho sugestões").
+    3.  **Tratamento de Feedback Inválido:**
+        * Se o feedback for vazio (''), muito curto e sem sentido (ex: '.', 'na', '0'), ou indicar explicitamente que não há feedback (ex: 'Nada', 'N/A', 'Sem comentários'), o sentimento deve ser `null`.
+    4.  **Formato de Saída:** Retorna a tua análise *apenas* no formato JSON especificado acima.
+
+    **Exemplos de Casos Válidos:**
+
+    *Feedback:* "Assegurar PDO disponível antes da deslocação do técnico para instalação do serviço em nova morada."
+    *JSON Esperado:*
+    ```json
+    {{
+      "sentiment": "Negative"
+    }}
+    ```
+    *(Implica uma falha ou área a melhorar)*
+
+    *Feedback:* "Péssimo serviço, nunca mais!"
+     *JSON Esperado:*
+    ```json
+    {{
+      "sentiment": "Very Negative"
+    }}
+    ```
+
+    *Feedback:* "Ter seguro nos telemóveis que empresta em vez de tentar fazer negócio com azares que podem acontecer."
+    *JSON Esperado:*
+    ```json
+    {{
+      "sentiment": "Negative"
+    }}
+    ```
+    *(Crítica a uma prática)*
+
+    *Feedback:* "Não tenho tido problemas recentemente."
+    *JSON Esperado:*
+    ```json
+    {{
+      "sentiment": "Neutral"
+    }}
+    ```
+    *(Declaração factual sem forte carga sobre *melhoria*)*
+
+    **Exemplos de Casos Inválidos (Resultando em `null`):**
+
+    *Feedback:* " " (string com espaço)
+    *JSON Esperado:*
+    ```json
+    {{
+      "sentiment": null
+    }}
+    ```
+
+    *Feedback:* "Nada"
+    *JSON Esperado:*
+    ```json
+    {{
+      "sentiment": null
+    }}
+    ```
+
+    *Feedback:* "."
+    *JSON Esperado:*
+    ```json
+    {{
+      "sentiment": null
+    }}
+    ```
+
+    *Feedback:* "na"
+    *JSON Esperado:*
+    ```json
+    {{
+      "sentiment": null
+    }}
+    ```
+
+    *Feedback:* "0"
+    *JSON Esperado:*
+    ```json
+    {{
+      "sentiment": null
+    }}
+    ```
+
+    **Feedbacks a processar:**
+    {feedbacks}
+
+    **Instruções de Formato Adicionais (Obrigatório seguir):**
+    {format_instructions}
+    """
+    # Use the ListFeedbackQuestionnaireSentiment Pydantic model for parsing
+    # Ensure this model exists and allows sentiment: Optional[str] with values 'Very Negative', 'Negative', 'Neutral'
+    return llm_prompt_chain(ListFeedbackQuestionnaireSentiment, template, ["feedbacks"])
+
+
+# Corrected batch processing function for sentiment analysis (No pre-filtering)
+def process_feedback_sentiment(chain, feedback_list: ListFeedbackQuestionnaire, batch_size: int = 10) -> ListFeedbackQuestionnaireSentiment:
+
+    validated_output_items = [] # List to hold validated FeedbackQuestionnaireOutput objects
+    total_feedbacks = len(feedback_list.list)
+
+
+    for i in range(0, total_feedbacks, batch_size):
+        batch_input_items = feedback_list.list[i:min(i + batch_size, total_feedbacks)]
+        if not batch_input_items:
+            print(f"Batch {i // batch_size + 1}: Skipped empty batch.")
+            continue
+
+        # Store original data dictionaries for merging later
+        original_data_batch = [item.model_dump() for item in batch_input_items]
+        # Prepare batch text for LLM prompt using the 'feedback' field
+        batch_texts = [str(item) for item in batch_input_items]
+        batch_for_prompt = "\n---\n".join(batch_texts) # Match format if needed by prompt
+
+        if not batch_for_prompt:
+             print(f"Skipping effectively empty batch starting at index {i} after cleaning.")
+             # Handle empty items by creating default error entries if desired
+             # (Similar logic as in process_feedback_generic's handling of empty batch)
+             for original_data in original_data_batch:
+                 error_data = {**original_data, 'sentiment': 'Error: Input feedback was empty or invalid after cleaning'}
+                 try:
+                    # Validate even the error entry against the output model
+                    validated_item = FeedbackQuestionnaireSentiment(**error_data)
+                    validated_output_items.append(validated_item)
+                 except ValidationError as val_err:
+                    print(f"Validation Error creating default error feedback object: {val_err}. Data: {error_data}")
+             continue
+
+        try:
+            # Invoke LLM chain (sentiment analyzer)
+            # Ensure chain's parser is ListFeedbackQuestionnaireSentiment
+            outputs: ListFeedbackQuestionnaireSentiment = chain.invoke({
+                "feedbacks": batch_for_prompt
+                # No 'classifications' needed here
+            })
+
+            # Post-processing: Merge and Validate
+            if outputs.list and len(outputs.list) != len(batch_input_items):
+                # Handle mismatch between input batch size and LLM output size
+                print(f"Warning: Mismatch between input batch size. Marking items as 'Error'.")
+                for original_data in original_data_batch:
+                    error_data = {**original_data, 'sentiment': 'Error: LLM output count mismatch'}
+                    try:
+                        validated_item = FeedbackQuestionnaireSentiment(**error_data)
+                        validated_output_items.append(validated_item)
+                    except ValidationError as val_err:
+                        print(f"Validation Error creating mismatch error feedback object: {val_err}. Data: {error_data}")
+            else:
+                validated_output_items.extend(outputs.list)
+        # Catch Pydantic errors during invoke/parsing (if model used for parsing is wrong)
+        except ValidationError as pydantic_err:
+            print(f"Pydantic Validation Error during LLM Parsing in batch {i // batch_size + 1}: {pydantic_err}")
+            for original_data in original_data_batch:
+                error_data = {**original_data, 'sentiment': "Error"}
+                try:
+                    validated_item = FeedbackQuestionnaireSentiment(**error_data)
+                    validated_output_items.append(validated_item)
+                except ValidationError as val_err:
+                    print(f"Validation Error creating parsing error feedback object: {val_err}. Data: {error_data}")
+            sleep(1)
+        # Catch other general exceptions
+        except Exception as e:
+            print(f"General Error processing LLM batch {i // batch_size + 1}: {e}")
+            for original_data in original_data_batch:
+                 error_data = {**original_data, 'sentiment': "Error"}
+                 try:
+                      validated_item = FeedbackQuestionnaireSentiment(**error_data)
+                      validated_output_items.append(validated_item)
+                 except ValidationError as val_err:
+                      print(f"Validation Error creating general error feedback object: {val_err}. Data: {error_data}")
+            sleep(1)
+
+    # Return the list wrapped in the Pydantic list model
+    return ListFeedbackQuestionnaireSentiment(list=validated_output_items)
