@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { SentimentSummaryResponse } from '../types/summaryTypes';
+import { FeedbackReportData } from '../types/reportTypes';
 
 // Fetch dashboard data for the last N months
 export const fetchDashboardData = async (numLastMonths: number) => {
@@ -165,6 +166,54 @@ export const fetchSentimentSummary = async (
        throw new Error(`Failed to fetch sentiment summary: ${error.message}`);
     } else {
        throw new Error('Failed to fetch sentiment summary due to an unknown error');
+    }
+  }
+};
+
+export const fetchGeneratedFeedbackReport = async (
+  reportSource: string, // e.g., "qualtrics_feedback_reports"
+  sourceDept: string,   // e.g., "provedoria"
+  year: number,
+  month: number
+): Promise<FeedbackReportData | null> => { // Return single object or null
+  try {
+    // Construct query parameters
+    const params = new URLSearchParams({
+      year: String(year),
+      month: String(month),
+    });
+
+    console.log(`API Request: GET /feedback/report/${reportSource}/${sourceDept}`, params.toString());
+
+    const response = await axios.get(
+      // Ensure your backend API base URL is correct (e.g., http://localhost:8000)
+      `http://localhost:8000/feedback/report/${reportSource}/${sourceDept}`, // Using relative path assumes proxy or same origin
+      { params }
+    );
+
+    console.log(`Raw Report Response Data for ${reportSource}/${sourceDept}:`, response.data);
+
+    // The backend returns a list, potentially empty or with one item
+    if (Array.isArray(response.data) && response.data.length > 0) {
+       // Assume the first item is the report we want
+       return response.data[0] as FeedbackReportData;
+    } else {
+       return null; // Return null if no report found for that period/dept
+    }
+
+  } catch (error) {
+    console.error(`Error fetching generated report for ${reportSource}/${sourceDept}:`, error);
+     if (axios.isAxiosError(error) && error.response) {
+       console.error("API Error Response:", error.response.data);
+       // Don't throw, return null to indicate missing report gracefully
+       // throw new Error(`API Error (${error.response.status}): ${error.response.data?.detail || error.message}`);
+       return null;
+    } else if (error instanceof Error) {
+       // throw new Error(`Failed to fetch generated report: ${error.message}`);
+       return null;
+    } else {
+       // throw new Error('Failed to fetch generated report due to an unknown error');
+       return null;
     }
   }
 };
