@@ -91,6 +91,11 @@ class ListFeedbackQuestionnaire(BaseModel):
     list: List[FeedbackQuestionnaire]
 
 
+class InputReport(BaseModel):
+    year: int
+    month: int
+    delete_report: bool = False
+
 
 # --- Database Connection and Operations ---
 
@@ -191,8 +196,31 @@ def get_classifications_as_string(collection) -> str:
 
 # Other utility functions (get_data_by_year_month, get_max_timestamp, etc.) remain the same
 # ... (keep existing functions like get_data_by_year_month, get_max_timestamp, get_collection_unique_timestamps)
-def get_data_by_year_month(collection, year, month, date_field, project):
+def get_data_by_year_month(
+    collection,
+    year: int,
+    month: int,
+    date_field: str,
+    project: Optional[Dict] = None, # Keep existing project param
+    filter_dict: Optional[Dict] = None # Add new optional filter parameter
+    ):
+    """
+    Retrieves data from a MongoDB collection for a specific year and month,
+    optionally applying additional filters and projection.
+
+    Args:
+        collection: The pymongo collection object.
+        year: The year to filter by.
+        month: The month to filter by (1-12).
+        date_field: The name of the field containing date information.
+        project: Optional dictionary defining a $project stage.
+        filter_dict: Optional dictionary of additional key-value pairs to add to the $match stage.
+
+    Returns:
+        A list of documents matching the criteria.
+    """
     try:
+        # --- Input validation remains the same ---
         today = date.today()
         if not (isinstance(year, int) and isinstance(month, int)):
             raise TypeError("Year and month must be integers.")
@@ -200,35 +228,57 @@ def get_data_by_year_month(collection, year, month, date_field, project):
             raise ValueError("Invalid Year/Month (cannot be in the future).")
         if not 1 <= month <= 12:
             raise ValueError("Invalid Month (must be between 1 and 12).")
+        # ----------------------------------------
 
         # Calculate start and end dates for the given month
         start_date = datetime(year, month, 1)
+        # Calculate end date correctly (first moment of the next month)
         if month == 12:
             end_date = datetime(year + 1, 1, 1)
         else:
             end_date = datetime(year, month + 1, 1)
 
+        # --- Build the $match stage ---
+        match_stage_filter = {
+            date_field: {
+                '$gte': start_date,
+                '$lt': end_date # Use $lt for exclusive end date
+            }
+        }
+        # Add additional filters if provided
+        if filter_dict and isinstance(filter_dict, dict):
+            match_stage_filter.update(filter_dict) # Merge the filter_dict
+        # ---------------------------
+
+        # Construct the pipeline
         pipeline = [
             {
-                '$match': {
-                    date_field: {
-                        '$gte': start_date,
-                        '$lt': end_date # Use $lt for the end date (exclusive)
-                    }
-                }
+                '$match': match_stage_filter # Use the combined match criteria
             },
             {
                 '$sort': {date_field: 1} # Sort by date
             }
-            # Add projection stage if provided
         ]
-        if project:
-             pipeline.append({'$project': project})
 
+        # Add projection stage if provided correctly
+        if project and isinstance(project, dict):
+             # Ensure it's added as a proper $project stage if not empty
+             if project: # Check if project dict is not empty
+                pipeline.append({'$project': project})
 
         return list(collection.aggregate(pipeline))
+
+    # --- Keep existing error handling ---
+    except TypeError as te:
+         # Reraise type errors for clarity
+         raise te
+    except ValueError as ve:
+         # Reraise value errors for clarity
+         raise ve
     except Exception as e:
-        # Add note is deprecated
+        # Handle other potential MongoDB or processing errors
+        # Using print or proper logging instead of add_note
+        print(f"Error retrieving monthly feedback: {e}")
         raise Exception(f"Get monthly feedback error: {e}")
 
 

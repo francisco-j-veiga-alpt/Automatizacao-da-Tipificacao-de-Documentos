@@ -489,3 +489,107 @@ def process_feedback_sentiment(chain, feedback_list: ListFeedbackQuestionnaire, 
 
     # Return the list wrapped in the Pydantic list model
     return ListFeedbackQuestionnaireSentiment(list=validated_output_items)
+
+
+# Presumed location: app-copy/backend/src/llm_utils/models.py
+# (Make sure necessary imports like BaseModel, Field, List, llm_prompt_chain are present)
+
+from pydantic import BaseModel, Field
+from typing import List, Optional # Added Optional for potential future use
+
+# Assume llm_prompt_chain is defined elsewhere in this file or imported
+# from .some_module import llm_prompt_chain # Example import
+
+
+# --- Define Pydantic Models with ENGLISH Field Names ---
+
+class EmergingTopic(BaseModel): # Renamed from TemaEmergente
+    topic: str = Field(description="The identified topic or theme that is relevant but infrequent.")
+    justification: str = Field(description="Brief explanation why this topic is important despite low frequency (e.g., strong emotion, new trend, strategic impact). Max 40 words.")
+
+class FeedbackReportOutputEN(BaseModel): # Renamed from FeedbackReportOutput
+    customer_suggestions: List[str] = Field(description="List of the main concrete suggestions given by customers for improvement (max 50 words per suggestion).")
+    ai_improvement_proposals: List[str] = Field(description="List of actionable improvement proposals, based on overall feedback and emerging topics (max 50 words per proposal).")
+    emerging_topics: List[EmergingTopic] = Field(description="List of relevant but infrequent topics identified in the feedback.")
+
+# --- Updated feedback_report Function ---
+
+def feedback_report():
+
+    # Instructions remain in Portuguese to guide analysis of Portuguese text
+    template = """
+    Você é um analista de feedback de clientes especializado em analisar respostas à pergunta 'O que poderá a MEO fazer para melhorar o serviço ao cliente?' provenientes de questionários de satisfação de uma empresa de telecomunicações em Portugal. O seu foco é extrair sugestões concretas, temas emergentes e propostas de melhoria diretamente dessas respostas.
+
+    A sua tarefa é analisar os dados de feedback fornecidos (respostas à pergunta 'O que poderá a MEO fazer para melhorar o serviço ao cliente?') e gerar um relatório JSON conciso que destaque sugestões diretas dos clientes, as suas recomendações de melhoria e temas importantes mas menos frequentes. A estrutura do JSON final deve usar os nomes de campo em Inglês especificados abaixo.
+
+    **Instruções:** Responde sempre em Português de Portugal para as descrições e sugestões. Seja conciso e direto nas suas respostas.
+
+    1.  **Leia as Respostas ao Questionário:** Analise o conjunto de respostas fornecidas à pergunta 'O que poderá a MEO fazer para melhorar o serviço ao cliente?'.
+
+    2.  **Extraia Informações Chave:** Com base na sua análise, identifique o seguinte:
+
+        * **2.1. Sugestões dos Clientes (customer_suggestions):** Identifique e liste as sugestões de melhoria mais concretas e recorrentes mencionadas diretamente pelos clientes nas suas respostas. Limite cada sugestão a cerca de 50 palavras. Ordene pela frequência ou importância percebida. O conteúdo das sugestões deve estar em Português.
+
+        * **2.2. Temas Emergentes (emerging_topics):** Identifique entre tópicos ou temas que, apesar de não serem os mais frequentes em volume nas respostas, são importantes por outras razões (ex: emoção forte, novas tendências, impacto estratégico, recclamações específicas, etc.).
+            * **Para cada tema emergente, forneça o tópico ("topic") em Português e uma breve justificativa ("justification") em Português (máximo 40 palavras) explicando a sua importância.**
+
+        * **2.3. Propostas de Melhoria (ai_improvement_proposals):** Com base nas respostas analisadas, sugira um plano de propostas de melhoria acionáveis para os serviços ou atendimento ao cliente. Seja específico (problema/solução). Limite cada proposta a cerca de 50 palavras. O conteúdo das propostas deve estar em Português.
+
+    3.  **Gere a Saída JSON (com campos em Inglês):** Retorne **exclusivamente** um objeto JSON válido com a seguinte estrutura **EM INGLÊS**. O *conteúdo* das strings (sugestões, tópicos, justificativas, propostas) deve permanecer em Português.
+
+        ```json
+        {{
+            "customer_suggestions": [
+                "Sugestão concreta do cliente 1...",
+                "Sugestão concreta do cliente 2...",
+                "Sugestão concreta do cliente 3...",
+                mais sugestões
+            ],
+            "emerging_topics": [
+                {{
+                    "topic": "Tópico pouco frequente mas importante 1",
+                    "justification": "Justificativa breve em Português..."
+                }},
+                {{
+                    "topic": "Tópico pouco frequente mas importante 2",
+                    "justification": "Justificativa breve em Português..."
+                }},
+                more tópicos
+            ],
+            "ai_improvement_proposals": [
+                "Ação específica sugerida pela IA 1 em Português...",
+                "Ação específica sugerida pela IA 2 em Português...",
+                mais melhorias
+            ]
+        }}
+        ```
+
+    4.  **Respostas à Pergunta 'O que podemos melhorar?':**
+        {data_str}
+
+    5.  **Instruções de Formato de Saída (Obrigatório Seguir):**
+        {format_instructions}
+
+    """
+
+    try:
+        # Pass the RENAMED Pydantic model for parsing
+        return llm_prompt_chain(FeedbackReportOutputEN, template, ["data_str"])
+    except Exception as e:
+        print(f"Error creating report prompt chain: {e}")
+        raise Exception(f"Error creating report prompt chain: {e}")
+
+
+# --- Updated process_report function ---
+
+def process_report(chain, data_str):
+    """
+    Invokes the LLM chain to process the feedback data string.
+    """
+    try:
+        # Update type hint to use the renamed Pydantic model
+        output: FeedbackReportOutputEN = chain.invoke({"data_str": data_str})
+        return output
+    except Exception as e:
+        print(f"Error processing report: {e}")
+        raise Exception(f"Error processing report: {e}")

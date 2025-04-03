@@ -1,12 +1,16 @@
+import calendar
 import json
 import os
-from fastapi import FastAPI, APIRouter, HTTPException, Query, status
+from fastapi import FastAPI, APIRouter, HTTPException, Path, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Optional, Union
-from src.llm_utils.models import feedback_classifier_generic, process_feedback_generic
-from src.conn_utils.mongo_conn import connect_to_collection, insert_data, delete_data_between_dates, InputProcessBase,\
-    InputProcessPortalDaQueixa, get_classifications_as_string, retrieve_grouped_sentiment_counts
+
+from dateutil.relativedelta import relativedelta
+from src.llm_utils.models import feedback_classifier_generic, feedback_report, process_feedback_generic, process_report
+from src.conn_utils.mongo_conn import connect_to_collection, get_data_by_year_month, insert_data, delete_data_between_dates, InputProcessBase,\
+    InputProcessPortalDaQueixa, get_classifications_as_string, retrieve_grouped_sentiment_counts, InputReport
 from src.utils.utils_portal_da_queixa import get_portal_da_queixa_feedback
+from datetime import date, datetime
 
 db_host = os.environ.get("MONGO_HOST")
 db_user = os.environ.get("MONGO_PRINCIPAL_USER")
@@ -169,8 +173,85 @@ async def get_summary_data(
             client.close()
 
 
+@feedback_router.post("/process-report/{source_feed}/{source_dept}/{report_dest}", status_code=status.HTTP_201_CREATED)
+async def process_report_api(
+    request_data: InputReport,
+    source_feed: str = Path(..., title="Feedbacks collection in mongodb"),
+    source_dept: str = Path(..., title="Feedbacks collection in mongodb"),
+    report_dest: str = Path(..., title="Feedbacks collection in mongodb")
+    ):
+    try:
+        today = date.today()
+        if request_data.year > today.year:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Year!")
+        elif request_data.year == today.year and request_data.month > today.month:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Month!")
+        elif request_data.month < 1 or request_data.month > 12:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Month!")
+
+        db, collection, client = connect_to_collection(uri_feedback, db_feedback, source_feed)
+        feed_month = get_data_by_year_month(collection=collection, date_field="date", month=request_data.month, year=request_data.year, project={}, filter_dict={"sentiment": {"$nin": [None, "null"]}, "source_qualtrics": source_dept})
+        feed_month = ["Feedback: " + fb["feedback"] for fb in feed_month]
+        feed_month = "\n---\n".join(feed_month)
+        
+        chain = feedback_report()
+        output = process_report(chain, data_str=json.dumps(feed_month))
+
+        # store report
+        report_collection = db["qualtrics_feedback_reports"]
+        id_date = datetime(request_data.year, request_data.month, calendar.monthrange(request_data.year, request_data.month)[1])
+
+        output = output.model_dump()
+        output.update({"date": id_date})
+        output.update({"source_qualtrics": source_dept})
+
+        del_before = id_date - relativedelta(months=1)
+        del_after = id_date + relativedelta(months=1)
+
+        if request_data.delete_report:
+            res_del = delete_data_between_dates(db[report_dest], del_before, del_after, "data")
+            print("Deleted number of rows: ", res_del)
+
+        insert_result = insert_data(db[report_dest], output)
+
+        return {"inserted_id": "ok"}
+
+    except Exception as e:
+        e.add_note(f"Error api report: {e}")
+        raise
+    finally:
+        if client:
+            client.close()
 
 
+@feedback_router.get("/report/{report_source}/{source_dept}", status_code=status.HTTP_200_OK)
+async def feedback_report_api(
+    year: int = Query(2, description="Year of report."),
+    month: int = Query(2, description="Month of report."),
+    report_source: str = Path(..., title="Report collection in mongodb"),
+    source_dept: str = Path(..., title="Report collection in mongodb")
+):
+    try:
+        today = date.today()
+        if year > today.year:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Year!")
+        elif year == today.year and month > today.month:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Month!")
+        elif month < 1 or month > 12:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Month!")
+        
+        db, collection, client = connect_to_collection(uri_feedback, db_feedback, report_source)
+
+        report_month = get_data_by_year_month(collection=collection, year=year, month=month, date_field="date", project={'_id': 0}, filter_dict={"source_qualtrics": source_dept})
+
+        return report_month
+
+    except Exception as e:
+        e.add_note(f"Error portal da queixa report: {e}")
+        raise
+    finally:
+        if client:
+            client.close()
 
 # Include the routers in the main app
 app.include_router(feedback_router)
