@@ -293,30 +293,53 @@ const PortalDaQeixa: React.FC = () => { // Main component can still use React.FC
         />
       </div>
 
-      {/* Row 2: Comparative Bar Chart */}
-      <div style={{ marginBottom: '30px' }}>
+      {/* --- Row 2: Comparative Bar Chart (Scrollable) --- */}
+      <div style={{ marginBottom: '30px' }}> {/* Wrapper div for margin */}
+          {/* Loading and Error indicators remain the same */}
           {(loadingCF || loadingQF) && !errorCF && !errorQF && <Loading />}
           {(errorCF || errorQF) && ( <div className="error-message"> Bar Chart Data Error: CF: {errorCF || 'OK'} | QF: {errorQF || 'OK'} </div> )}
+
+          {/* Render bar chart section if data is ready */}
           {!loadingCF && !loadingQF && !errorCF && !errorQF && mergedChartData.length > 0 && (
               <div className="dashboard-box full-width">
                   <h2>Comparison by Classification (Level: {currentGroupLevel ?? 'Full Path'})</h2>
-                  <BarResponsiveContainer width="100%" height={Math.max(600, mergedChartData.length * 40)}>
-                      <BarChart data={mergedChartData} layout="vertical" margin={{ top: 20, right: 50, left: 200, bottom: 20 }}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis type="number" allowDecimals={false} />
-                          <YAxis type="category" dataKey="name" width={180} tick={{ fontSize: 10 }} interval={0}/>
-                          <BarTooltip />
-                          <BarLegend verticalAlign="top" wrapperStyle={{ paddingBottom: '20px' }}/>
-                          {SENTIMENT_KEYS.map(sentiment => ( <Bar key={`cf-${sentiment}`} dataKey={`cf_${sentiment}`} stackId="cf" fill={SENTIMENT_COLORS[sentiment] || '#8884d8'} name={`CF ${sentiment}`} /> ))}
-                          {SENTIMENT_KEYS.map(sentiment => ( <Bar key={`qf-${sentiment}`} dataKey={`qf_${sentiment}`} stackId="qf" fill={SENTIMENT_COLORS[sentiment] || '#82ca9d'} name={`QF ${sentiment}`} /> ))}
-                      </BarChart>
-                  </BarResponsiveContainer>
+
+                  {/* --- Scrollable Container for the Chart --- */}
+                  <div style={{
+                      maxHeight: '600px', // << Set a maximum height (e.g., 600px or '70vh')
+                      overflowY: 'auto',   // << Add vertical scroll when content exceeds maxHeight
+                      overflowX: 'hidden', // << Optional: Hide horizontal scrollbar if needed
+                      width: '100%'        // << Ensure it takes full width
+                  }}>
+                      {/* Responsive container's height determines the actual chart size inside the scrollable area */}
+                      <BarResponsiveContainer width="100%" height={Math.max(600, mergedChartData.length * 40)}>
+                          <BarChart
+                              data={mergedChartData}
+                              layout="vertical"
+                              margin={{ top: 20, right: 50, left: 200, bottom: 20 }}
+                          >
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis type="number" allowDecimals={false} />
+                              <YAxis type="category" dataKey="name" width={180} tick={{ fontSize: 10 }} interval={0} />
+                              <BarTooltip />
+                              <BarLegend verticalAlign="top" wrapperStyle={{ paddingBottom: '20px' }}/>
+                              {/* CF Bars */}
+                              {SENTIMENT_KEYS.map(sentiment => ( <Bar key={`cf-${sentiment}`} dataKey={`cf_${sentiment}`} stackId="cf" fill={SENTIMENT_COLORS[sentiment] || '#8884d8'} name={`CF ${sentiment}`} /> ))}
+                              {/* QF Bars */}
+                              {SENTIMENT_KEYS.map(sentiment => ( <Bar key={`qf-${sentiment}`} dataKey={`qf_${sentiment}`} stackId="qf" fill={SENTIMENT_COLORS[sentiment] || '#82ca9d'} name={`QF ${sentiment}`} /> ))}
+                          </BarChart>
+                      </BarResponsiveContainer>
+                  </div>
+                  {/* --- End Scrollable Container --- */}
+
               </div>
           )}
+           {/* Message if no merged data to show (remains the same) */}
           {!loadingCF && !loadingQF && !errorCF && !errorQF && mergedChartData.length === 0 && (
               <div className="dashboard-box full-width" style={{minHeight: '100px', display:'flex', alignItems:'center', justifyContent:'center'}}>No matching classification data found for comparison.</div>
           )}
       </div>
+      {/* ----------------------------------------- */}
 
       {/* --- Row 3: Generated Report Display --- */}
       <div className="dashboard-box full-width">
