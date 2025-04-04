@@ -2,12 +2,13 @@ import calendar
 import json
 import os
 from fastapi import FastAPI, APIRouter, HTTPException, Path, Query, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Union, Any
 
 from dateutil.relativedelta import relativedelta
 from src.llm_utils.models import feedback_classifier_generic, feedback_report, process_feedback_generic, process_report
-from src.conn_utils.mongo_conn import connect_to_collection, get_data_by_year_month, get_max_timestamp, insert_data, delete_data_between_dates, InputProcessBase,\
+from src.conn_utils.mongo_conn import connect_to_collection, get_data_by_year_month, get_max_timestamp, get_review_summary, insert_data, delete_data_between_dates, InputProcessBase,\
     InputProcessPortalDaQueixa, get_classifications_as_string, retrieve_grouped_sentiment_counts, InputReport
 from src.utils.utils_portal_da_queixa import get_portal_da_queixa_feedback
 from datetime import date, datetime
@@ -268,6 +269,45 @@ async def latest_timestamp(source: str = Path(..., title="Collection in mongodb"
         if client:
             client.close()
 
+
+@feedback_router.get("/summary/needs-review/{collection_name}", status_code=status.HTTP_200_OK)
+async def get_review_summary_api( # Renamed function
+    collection_name: str = Path(..., title="Collection name in MongoDB")
+    # date_sort_field: str = Query("date", description="Field to sort recent items by") # Optional: Make sort field configurable
+) -> Dict[str, Any]: # Use Dict or define a Pydantic response model
+    """
+    Gets the counts and 10 most recent feedback items based on the
+    'needs_review' status from the specified collection.
+    """
+    client = None
+    # Assuming 'date' is the standard field for sorting recency
+    date_sort_field = "date"
+
+    try:
+        if not collection_name or not collection_name.strip():
+             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Collection name cannot be empty.")
+
+        try:
+            db, collection, client = connect_to_collection(
+                uri_feedback, db_feedback, collection_name, create_collection=False
+            )
+        except ValueError as e:
+             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Collection '{collection_name}' not found. Details: {e}")
+
+        # Call the updated function
+        summary_data = get_review_summary(collection, date_sort_field=date_sort_field)
+
+        # Use jsonable_encoder to handle ObjectId and datetime serialization for the response
+        return jsonable_encoder(summary_data)
+
+    except HTTPException as http_exc:
+         raise http_exc
+    except Exception as e:
+        print(f"Error getting review summary for {collection_name}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get review summary: {type(e).__name__}")
+    finally:
+        if client:
+            client.close()
 
 # Include the routers in the main app
 app.include_router(feedback_router)

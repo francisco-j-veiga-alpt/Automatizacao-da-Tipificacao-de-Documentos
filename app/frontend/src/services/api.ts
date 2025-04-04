@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { SentimentSummaryResponse } from '../types/summaryTypes';
 import { FeedbackReportData } from '../types/reportTypes';
-import { ProcessPortalDaQueixaParams, ProcessPortalDaQueixaResponse } from '../types/adminTypes';
+import { ProcessPortalDaQueixaParams, ProcessPortalDaQueixaResponse, ReviewSummaryResponse } from '../types/adminTypes';
 
 // Fetch dashboard data for the last N months
 export const fetchDashboardData = async (numLastMonths: number) => {
@@ -261,3 +261,29 @@ try {
 }
 };
 // --------------------------------------------------
+export const fetchReviewSummary = async (
+  collectionName: string
+): Promise<ReviewSummaryResponse> => {
+  try {
+      // Path based on backend endpoint definition
+      const url = `http://localhost:8000/feedback/summary/needs-review/${collectionName}`;
+      console.log(`API Request: GET ${url}`);
+
+      const response = await axios.get(url);
+
+      console.log(`Raw Review Summary Response for ${collectionName}:`, response.data);
+      // Assuming response.data directly matches ReviewSummaryResponse structure after jsonable_encoder
+      return response.data as ReviewSummaryResponse;
+
+  } catch (error) {
+      console.error(`Error fetching review summary for ${collectionName}:`, error);
+      if (axios.isAxiosError(error) && error.response) {
+          console.error("API Error Response:", error.response.data);
+          throw new Error(`API Error (${error.response.status}): ${error.response.data?.detail || error.message}`);
+      } else if (error instanceof Error) {
+          throw new Error(`Failed to fetch review summary: ${error.message}`);
+      } else {
+          throw new Error('Failed to fetch review summary due to an unknown error');
+      }
+  }
+};

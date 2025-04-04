@@ -1,5 +1,5 @@
 # src/conn_utils/mongo_conn.py
-from pymongo import MongoClient
+from pymongo import MongoClient, DESCENDING
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Dict, Optional, Any # Added Optional and Any
 from datetime import timedelta, datetime, time, date
@@ -565,3 +565,61 @@ def retrieve_grouped_sentiment_counts(
     except Exception as e:
         print(f"An error occurred during aggregation: {e}")
         return None
+
+
+def get_review_summary(collection, date_sort_field: str = "date") -> Dict[str, Any]:
+    """
+    Counts documents and retrieves the 10 most recent items (excluding _id)
+    based on the boolean 'needs_review' field.
+
+    Args:
+        collection: The pymongo collection object.
+        date_sort_field: The name of the date field to use for sorting recent items.
+
+    Returns:
+        A dictionary containing counts and lists of recent items. Documents
+        in the lists will not contain the '_id' field. Other BSON types
+        (like datetime) will remain and need handling by the caller (e.g., FastAPI's
+        jsonable_encoder).
+        Example: {
+            "counts": {"needs_review_true": 10, "needs_review_false": 100},
+            "recent_needs_review": [list_of_10_docs_true_without_id],
+            "recent_does_not_need_review": [list_of_10_docs_false_without_id]
+        }
+    """
+    try:
+        # Get Counts
+        count_true = collection.count_documents({"needs_review": True})
+        count_false = collection.count_documents({"needs_review": False})
+
+        # Define projection to exclude _id
+        projection = {'_id': 0}
+
+        # Get 10 Most Recent Items for needs_review: True, excluding _id
+        recent_true_cursor = collection.find(
+            {"needs_review": True},
+            projection # Apply projection here
+        ).sort(date_sort_field, DESCENDING).limit(10)
+        recent_true_list = list(recent_true_cursor)
+
+        # Get 10 Most Recent Items for needs_review: False, excluding _id
+        recent_false_cursor = collection.find(
+            {"needs_review": False},
+            projection # Apply projection here
+        ).sort(date_sort_field, DESCENDING).limit(10)
+        recent_false_list = list(recent_false_cursor)
+
+        # --- Removed manual serialization logic ---
+
+        return {
+            "counts": {
+                "needs_review_true": count_true,
+                "needs_review_false": count_false
+            },
+            # Return the lists fetched without _id
+            "recent_needs_review": recent_true_list,
+            "recent_does_not_need_review": recent_false_list
+        }
+    except Exception as e:
+        print(f"Error getting review summary from collection '{collection.name}': {e}")
+        raise Exception(f"Error getting review summary: {e}")
