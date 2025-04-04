@@ -343,7 +343,7 @@ const PortalDaQeixa: React.FC = () => { // Main component can still use React.FC
 
       {/* --- Row 3: Generated Report Display --- */}
       <div className="dashboard-box full-width">
-          <h2>Feedback Report ({selectedYear}/{selectedMonth.toString().padStart(2,'0')})</h2>
+          <h2>Qualtrics Feedback Report ({selectedYear}/{selectedMonth.toString().padStart(2,'0')})</h2>
           {loadingReport && <Loading />}
           {errorReport && <div className="error-message">Error loading report: {errorReport}</div>}
           {!loadingReport && !errorReport && reportData && (

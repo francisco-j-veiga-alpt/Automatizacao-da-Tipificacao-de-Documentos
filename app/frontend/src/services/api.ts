@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { SentimentSummaryResponse } from '../types/summaryTypes';
 import { FeedbackReportData } from '../types/reportTypes';
+import { ProcessPortalDaQueixaParams, ProcessPortalDaQueixaResponse } from '../types/adminTypes';
 
 // Fetch dashboard data for the last N months
 export const fetchDashboardData = async (numLastMonths: number) => {
@@ -76,15 +77,7 @@ export const processReport = async (params: ProcessReportParams, source: string)
   }
 };
 
-export const fetchLatestTimestamp = async (source: string): Promise<string> => {
-  try {
-    const response = await axios.get(`http://localhost:8000/feedback/${source}/latest-timestamp`);
-    return response.data; // The API returns a string like "2025-02-22 00:00:00"
-  } catch (error) {
-    console.error('Error fetching latest timestamp:', error);
-    throw error;
-  }
-};
+
 
 export const uploadFileToApi = async (
   file: File,
@@ -217,3 +210,54 @@ export const fetchGeneratedFeedbackReport = async (
     }
   }
 };
+
+
+
+export const fetchLatestTimestamp = async (source: string): Promise<string> => {
+  try {
+    const response = await axios.get(`http://localhost:8000/feedback/latest-timestamp/${source}`); // Relative path
+    // Assuming backend returns date string directly or needs parsing
+    // The provided backend code returns it directly
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching latest timestamp for ${source}:`, error);
+    // Handle specific errors or rethrow
+    if (axios.isAxiosError(error) && error.response) {
+       throw new Error(`API Error (${error.response.status}): ${error.response.data?.detail || error.message}`);
+    } else if (error instanceof Error) {
+       throw new Error(`Failed to fetch latest timestamp: ${error.message}`);
+    } else {
+       throw new Error('Failed to fetch latest timestamp due to an unknown error');
+    }
+  }
+};
+// ---------------------------------------
+
+
+// --- NEW Function to Process Portal da Queixa Data ---
+export const processSourceFeedback = async (
+  source: string, // <<< Added source parameter
+  params: ProcessPortalDaQueixaParams // Keep using specific param type for portal_da_queixa case
+): Promise<ProcessPortalDaQueixaResponse> => {
+try {
+  // Use the generic endpoint with the source in the path
+  const response = await axios.post(
+    `http://localhost:8000/feedback/process/${source}`, // <<< Use generic path with source variable
+    params
+  );
+  console.log(`Process ${source} Response:`, response.data);
+  return response.data;
+} catch (error) {
+  console.error(`Error processing ${source} feedback:`, error);
+   if (axios.isAxiosError(error) && error.response) {
+     console.error("API Error Response:", error.response.data);
+     // Use more specific error detail if available from the new endpoint
+     throw new Error(`API Error (${error.response.status}): ${error.response.data?.detail || error.message}`);
+  } else if (error instanceof Error) {
+     throw new Error(`Failed to process ${source} feedback: ${error.message}`);
+  } else {
+     throw new Error(`Failed to process ${source} feedback due to an unknown error`);
+  }
+}
+};
+// --------------------------------------------------

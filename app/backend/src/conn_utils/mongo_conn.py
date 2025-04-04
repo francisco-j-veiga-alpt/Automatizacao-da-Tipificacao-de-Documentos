@@ -12,7 +12,7 @@ class InputProcessBase(BaseModel):
     )
     last_date: Optional[datetime] = Field(
         default_factory=lambda: datetime.combine(datetime.today().date(), time.min) - timedelta(days=2),
-        description="Last date feedback was processed (inclusive)"
+        description="Last date feedback was processed (exclusive)"
     )
     delete_feedback: bool = Field(
         False, description="Delete any existing feedback prior to insertion between dates"

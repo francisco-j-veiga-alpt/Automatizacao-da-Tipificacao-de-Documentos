@@ -7,7 +7,7 @@ from typing import Dict, Optional, Union
 
 from dateutil.relativedelta import relativedelta
 from src.llm_utils.models import feedback_classifier_generic, feedback_report, process_feedback_generic, process_report
-from src.conn_utils.mongo_conn import connect_to_collection, get_data_by_year_month, insert_data, delete_data_between_dates, InputProcessBase,\
+from src.conn_utils.mongo_conn import connect_to_collection, get_data_by_year_month, get_max_timestamp, insert_data, delete_data_between_dates, InputProcessBase,\
     InputProcessPortalDaQueixa, get_classifications_as_string, retrieve_grouped_sentiment_counts, InputReport
 from src.utils.utils_portal_da_queixa import get_portal_da_queixa_feedback
 from datetime import date, datetime
@@ -75,7 +75,7 @@ async def process_sources(params: Union[InputProcessBase, InputProcessPortalDaQu
         
         # Delete existing feedback if requested
         if params.delete_feedback:
-            delete_data_between_dates(collection, params.last_date, params.to_date, "data")
+            delete_data_between_dates(collection, params.last_date, params.to_date, "date")
 
         class_collection = db[db_collection_classifications]
         
@@ -83,7 +83,7 @@ async def process_sources(params: Union[InputProcessBase, InputProcessPortalDaQu
 
         # Process feedback with LLM
         chain = feedback_classifier_generic()
-        output = process_feedback_generic(chain, res, classifications, 10)
+        output = process_feedback_generic(chain, res, classifications, 1)
 
         # Insert processed data into MongoDB
         insert_result = insert_data(collection, output.model_dump()["list"])
@@ -252,6 +252,22 @@ async def feedback_report_api(
     finally:
         if client:
             client.close()
+
+
+@feedback_router.get("/latest-timestamp/{source}", status_code=status.HTTP_200_OK)
+async def latest_timestamp(source: str = Path(..., title="Collection in mongodb")):
+    try:
+        _, collection, client = connect_to_collection(uri_feedback, db_feedback, source)
+
+        return get_max_timestamp(collection, "date")
+
+    except Exception as e:
+        e.add_note(f"Error get timestamp: {e}")
+        raise
+    finally:
+        if client:
+            client.close()
+
 
 # Include the routers in the main app
 app.include_router(feedback_router)
