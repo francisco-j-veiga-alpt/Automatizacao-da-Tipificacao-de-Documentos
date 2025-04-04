@@ -220,7 +220,7 @@ const PortalDaQeixa: React.FC = () => { // Main component can still use React.FC
         });
         return dataPoint; // Ensure return from map
     });
-    merged.sort((a, b) => a.name.localeCompare(b.name));
+    merged.sort((a, b) => b.cf_total - a.cf_total);
     // console.log("Merged Chart Data:", merged);
     return merged; // Ensure explicit return
   }, [summaryDataCF, summaryDataQF]);
