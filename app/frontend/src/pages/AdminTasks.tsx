@@ -1,8 +1,21 @@
 // src/pages/AdminTasks.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 // Assuming api.ts is in ../services/ and types are in ../types/
-import { processSourceFeedback, fetchLatestTimestamp, fetchReviewSummary } from '../services/api';
-import { ProcessPortalDaQueixaParams, ReviewSummaryResponse, FeedbackDocument, NeedsReviewCounts, FeedbackReportData } from '../types/adminTypes'; // Ensure all needed types are imported
+import {
+    processSourceFeedback,
+    fetchLatestTimestamp,
+    fetchReviewSummary,
+    uploadQualtricsFile, // Import upload function
+    processReport // Import report processing function
+} from '../services/api';
+import {
+    ProcessPortalDaQueixaParams,
+    ReviewSummaryResponse,
+    FeedbackDocument,
+    QualtricsUploadResponse, // Import upload response type
+    ProcessReportParams, // Import report params type
+    ProcessReportResponse // Import report response type
+} from '../types/adminTypes'; // Ensure all needed types are imported
 import Loading from '../components/Loading';
 import '../index.css';
 // Import necessary Recharts components
@@ -18,7 +31,7 @@ const REVIEW_STATUS_COLORS: { [key: string]: string } = {
 
 
 const AdminTasks: React.FC = () => {
-    // --- State for Processing Form ---
+    // --- State for Processing Form (Portal da Queixa) ---
     const defaultFormData: ProcessPortalDaQueixaParams = {
         to_date: new Date().toISOString().split('T')[0],
         last_date: '',
@@ -32,7 +45,7 @@ const AdminTasks: React.FC = () => {
     const [loadingTimestamp, setLoadingTimestamp] = useState<boolean>(true);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    // --------------------------------
+    // -----------------------------------------------------
 
     // --- State for Review Summary ---
     const [reviewSummary, setReviewSummary] = useState<ReviewSummaryResponse | null>(null);
@@ -41,9 +54,34 @@ const AdminTasks: React.FC = () => {
     const [selectedReview, setSelectedReview] = useState<FeedbackDocument | null>(null);
     // ------------------------------
 
-    // Define sources
+    // --- State for Qualtrics File Upload ---
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [deleteDataForUpload, setDeleteDataForUpload] = useState<boolean>(false);
+    const [loadingUpload, setLoadingUpload] = useState<boolean>(false);
+    const [successUploadMessage, setSuccessUploadMessage] = useState<string | null>(null);
+    const [errorUploadMessage, setErrorUploadMessage] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null); // Ref to reset file input
+    // -------------------------------------------
+
+    // --- State for Report Processing Form ---
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
+    const [reportYear, setReportYear] = useState<number>(currentYear);
+    const [reportMonth, setReportMonth] = useState<number>(currentMonth);
+    const [deleteReportFlag, setDeleteReportFlag] = useState<boolean>(true); // Default delete true
+    const [loadingReportProcess, setLoadingReportProcess] = useState<boolean>(false);
+    const [successReportMessage, setSuccessReportMessage] = useState<string | null>(null);
+    const [errorReportMessage, setErrorReportMessage] = useState<string | null>(null);
+    // -------------------------------------
+
+    // Define sources and parameters
     const processingSource = "portal_da_queixa";
     const summarySource = "customer_feedback"; // Source to get counts/reviews from
+    // Parameters for Report Processing
+    const reportSourceFeed = "qualtrics_feedback";
+    const reportSourceDept = "provedoria";
+    const reportReportDest = "qualtrics_feedback_reports";
+    // -----------------------------
 
     // --- useEffect for Initial Data Fetching (Timestamp & Summary) ---
     useEffect(() => {
@@ -97,7 +135,7 @@ const AdminTasks: React.FC = () => {
     }, [summarySource]); // Run only on mount or if summarySource changes
     // -----------------------------------------------------------------
 
-    // Handle input changes for the form fields
+    // Handle input changes for the processing form fields
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
         setFormData(prev => ({
@@ -149,13 +187,114 @@ const AdminTasks: React.FC = () => {
     // --- End handleSubmit ---
 
 
+     // --- Handlers for File Upload ---
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            setSelectedFile(e.target.files[0]);
+            setSuccessUploadMessage(null); setErrorUploadMessage(null); // Clear messages
+        } else {
+            setSelectedFile(null);
+        }
+    };
+
+    const handleUploadCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setDeleteDataForUpload(e.target.checked);
+    };
+
+    const handleUploadSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+         e.preventDefault();
+        if (!selectedFile) {
+            setErrorUploadMessage("Please select an Excel file first.");
+            return;
+        }
+
+        setLoadingUpload(true);
+        setSuccessUploadMessage(null); setErrorUploadMessage(null);
+
+        try {
+            const response = await uploadQualtricsFile(selectedFile, deleteDataForUpload);
+
+            // Construct success message including deleted_count if present
+            let successMsg = `${response.message} Inserted: ${response.num_inserted_records}.`;
+            if (response.deleted_count !== undefined && response.deleted_count !== null) {
+                successMsg += ` Deleted: ${response.deleted_count}.`;
+            }
+            setSuccessUploadMessage(successMsg);
+
+            setSelectedFile(null); // Clear file state
+            if (fileInputRef.current) { fileInputRef.current.value = ""; }
+
+            // Optionally trigger summary refresh
+            setLoadingSummary(true); setErrorSummary(null);
+            fetchReviewSummary(summarySource)
+                 .then(summary => setReviewSummary(summary))
+                 .catch(err => setErrorSummary(err instanceof Error ? err.message : "Failed to reload summary."))
+                 .finally(() => setLoadingSummary(false));
+
+        } catch (error: any) {
+            setErrorUploadMessage(`Upload Error: ${error.message || 'An unexpected error occurred.'}`);
+        } finally {
+            setLoadingUpload(false);
+        }
+    };
+    // ----------------------------------
+
+
+    // --- Handlers for Report Processing Form ---
+     const handleReportYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+         setReportYear(Number(e.target.value));
+     };
+      const handleReportMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+         setReportMonth(Number(e.target.value));
+     };
+      const handleReportDeleteFlagChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+         setDeleteReportFlag(e.target.checked);
+     };
+
+     const handleReportProcessSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        setLoadingReportProcess(true);
+        setSuccessReportMessage(null);
+        setErrorReportMessage(null);
+
+        // Validation
+        const today = new Date();
+        const currentFullYearVal = today.getFullYear();
+        const currentFullMonth = today.getMonth() + 1;
+        if (reportYear > currentFullYearVal || (reportYear === currentFullYearVal && reportMonth > currentFullMonth)) {
+             setErrorReportMessage("Cannot process report for a future date.");
+             setLoadingReportProcess(false); return;
+        }
+
+        const params: ProcessReportParams = { year: reportYear, month: reportMonth, delete_report: deleteReportFlag };
+
+        try {
+            console.log(`Submitting Report Process for ${reportSourceFeed}/${reportSourceDept} -> ${reportReportDest}:`, params);
+            // Call the updated API function with path parameters
+            const response = await processReport(
+                params,
+                reportSourceFeed,
+                reportSourceDept,
+                reportReportDest
+            );
+            setSuccessReportMessage(`Report processing initiated successfully! Status: ${response.inserted_id}`);
+        } catch(error: any) {
+             console.error("Report Processing Error:", error);
+            setErrorReportMessage(`Error: ${error.message || 'An unexpected error occurred.'}`);
+        } finally {
+            setLoadingReportProcess(false);
+        }
+     };
+    // -------------------------------------------
+
+
     // --- useMemo for Review Count Chart Data ---
     const reviewCountChartData = useMemo(() => {
         if (!reviewSummary?.counts) return [];
         return [
             { name: 'Needs Review', value: reviewSummary.counts.needs_review_true ?? 0 },
             { name: 'No Review Needed', value: reviewSummary.counts.needs_review_false ?? 0 },
-        ].filter(item => item.value > 0); // Only include slices with value > 0
+        ].filter(item => item.value > 0);
     }, [reviewSummary]);
     // ---------------------------------------
 
@@ -168,36 +307,21 @@ const AdminTasks: React.FC = () => {
 
     // --- Custom label function for Review Count Pie Chart ---
     const RADIAN = Math.PI / 180;
-    const renderReviewCountLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, name, value }: any) => {
-        // Position label in the middle of the slice thickness
-        const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const renderReviewCountLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, value }: any) => {
+        const radius = innerRadius + (outerRadius - innerRadius) * 0.6;
         const x = cx + radius * Math.cos(-midAngle * RADIAN);
         const y = cy + radius * Math.sin(-midAngle * RADIAN);
-
-        // Don't render label if percentage is too small (e.g., less than 5%)
-        // Adjust or remove this threshold if needed
         if (!percent || percent < 0.05) return null;
-
-        // Make sure value exists before rendering (optional check, but safe)
         if (value === undefined || value === null) return null;
-
-        return (
-        <text
-            x={x}
-            y={y}
-            fill="white" // Assuming slice colors provide enough contrast
-            textAnchor={x > cx ? 'start' : 'end'}
-            dominantBaseline="central"
-            fontSize="12px" // You might be able to increase this slightly now
-            fontWeight="bold"
-        >
-            {/* --- MODIFIED: Display only percentage --- */}
-            {`${(percent * 100).toFixed(0)}%`}
-            {/* ---------------------------------------- */}
-        </text>
-        );
+        return ( <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize="12px" fontWeight="bold"> {`${value} (${(percent * 100).toFixed(0)}%)`} </text> );
     };
     // ------------------------------------------------------
+
+
+    // --- Year/Month options generation for Report Processing Filter ---
+    const reportYearOptions = Array.from({ length: 5 }, (_, i) => currentYear - i);
+    const reportMonthOptions = Array.from({ length: 12 }, (_, i) => i + 1);
+    // ---------------------------------------------------------------
 
 
     // --- JSX Rendering ---
@@ -205,21 +329,25 @@ const AdminTasks: React.FC = () => {
         <div className="portal-container">
             <h1>Admin Tasks</h1>
 
-             {/* Processing Form Section */}
+             {/* Section 1: Processing Form Section */}
             <div className="dashboard-box" style={{ marginBottom: '30px' }}>
                  <h2>Process Portal da Queixa Feedback</h2>
                  <p>
                     Trigger the backend process to scrape feedback from '{processingSource}', analyze it, and store it in the `{summarySource}` collection.
                     <br/><em>(Last processed date shown below is from the `{summarySource}` collection).</em>
-                </p>
+                 </p>
                  <form onSubmit={handleSubmit} className="process-feedback-form" style={{width: 'auto', maxWidth: '500px'}}>
-                     {/* Form Inputs */}
+                     {/* Timestamp */}
                      <div className="form-group"> <label>Last Processed Date:</label> <input type="text" value={loadingTimestamp ? 'Loading...' : latestTimestamp ?? 'N/A'} readOnly disabled style={{ backgroundColor: '#eee' }}/> </div>
+                     {/* Date Inputs */}
                      <div className="form-group"> <label htmlFor="last_date">Process From Date (Exclusive):</label> <input type="date" id="last_date" name="last_date" value={formData.last_date} onChange={handleInputChange} required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '95%' }}/> </div>
                      <div className="form-group"> <label htmlFor="to_date">Process Until Date (Inclusive):</label> <input type="date" id="to_date" name="to_date" value={formData.to_date} onChange={handleInputChange} required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '95%' }}/> </div>
+                     {/* Page Inputs */}
                      <div className="form-group"> <label htmlFor="begin_pages_to_look">Start Page Number (Portal da Queixa):</label> <input type="number" id="begin_pages_to_look" name="begin_pages_to_look" value={formData.begin_pages_to_look} onChange={handleInputChange} min="1" required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '95%' }}/> </div>
                      <div className="form-group"> <label htmlFor="num_of_pages_to_look">Number of Pages to Check (Portal da Queixa):</label> <input type="number" id="num_of_pages_to_look" name="num_of_pages_to_look" value={formData.num_of_pages_to_look} onChange={handleInputChange} min="1" required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '95%' }}/> </div>
+                     {/* Delete Checkbox */}
                      <div className="form-group checkbox-group"> <label htmlFor="delete_feedback"> <input type="checkbox" id="delete_feedback" name="delete_feedback" checked={formData.delete_feedback} onChange={handleInputChange} /> {' '} Delete Existing Feedback in Date Range First (in `{summarySource}`) </label> </div>
+                     {/* Submit Button */}
                      <button type="submit" className="toggle-form-button" disabled={loadingProcess || loadingTimestamp}> {loadingProcess ? 'Processing...' : 'Start Processing'} </button>
                      {/* Messages */}
                      {successMessage && <div className="message success-message" style={{marginTop: '15px'}}>{successMessage}</div>}
@@ -227,8 +355,70 @@ const AdminTasks: React.FC = () => {
                  </form>
             </div>
 
+            {/* Section 2: Qualtrics Upload Section */}
+            <div className="dashboard-box" style={{ marginBottom: '30px' }}>
+                 <h2>Upload Qualtrics Provedoria File</h2>
+                 <p>Upload an Excel file (.xlsx, .xls) with Qualtrics feedback for processing and sentiment analysis.</p>
+                  <form onSubmit={handleUploadSubmit} className="process-feedback-form" style={{width: 'auto', maxWidth: '500px'}}> {/* Reusing class */}
+                     <div className="form-group">
+                         <label htmlFor="qualtrics-file">Select Excel File:</label>
+                         <input type="file" id="qualtrics-file" accept=".xlsx, .xls" onChange={handleFileChange} ref={fileInputRef} required style={{ display: 'block', marginTop: '5px' }} />
+                     </div>
+                      <div className="form-group checkbox-group">
+                         <label htmlFor="delete-upload-data">
+                             <input type="checkbox" id="delete-upload-data" checked={deleteDataForUpload} onChange={handleUploadCheckboxChange} />
+                            {' '} Delete Existing Data (based on min/max dates in file) Before Uploading
+                         </label>
+                     </div>
+                     <button type="submit" className="toggle-form-button" disabled={!selectedFile || loadingUpload}>
+                         {loadingUpload ? 'Uploading...' : 'Upload and Process'}
+                     </button>
+                      {/* Upload specific messages */}
+                     {successUploadMessage && <div className="message success-message" style={{marginTop: '15px'}}>{successUploadMessage}</div>}
+                     {errorUploadMessage && <div className="message error-message" style={{marginTop: '15px'}}>{errorUploadMessage}</div>}
+                 </form>
+            </div>
 
-            {/* Review Summary Section */}
+             {/* Section 3: Process Qualtrics Report */}
+             <div className="dashboard-box" style={{ marginBottom: '30px' }}>
+                 <h2>Process Qualtrics Feedback Report</h2>
+                 <p>Trigger the backend process to analyze feedback from the `{reportSourceFeed}` collection (dept: `{reportSourceDept}`) for a specific month and generate/store the report in `{reportReportDest}`.</p>
+                  <form onSubmit={handleReportProcessSubmit} className="process-report-form" style={{width: 'auto', maxWidth: '500px'}}> {/* Reusing class */}
+                     {/* Report Date Selection */}
+                     <div style={{ display: 'flex', gap: '15px', marginBottom: '15px' }}>
+                        <div className="form-group" style={{flex: 1}}>
+                            <label htmlFor="report-year">Report Year:</label>
+                            <select id="report-year" className="custom-dropdown" value={reportYear} onChange={handleReportYearChange}>
+                                {reportYearOptions.map(year => (<option key={year} value={year}>{year}</option>))}
+                            </select>
+                        </div>
+                         <div className="form-group" style={{flex: 1}}>
+                            <label htmlFor="report-month">Report Month:</label>
+                            <select id="report-month" className="custom-dropdown" value={reportMonth} onChange={handleReportMonthChange}>
+                               {reportMonthOptions.map(month => (<option key={month} value={month}>{new Date(reportYear, month - 1).toLocaleString('default', { month: 'long' })} ({month})</option>))}
+                            </select>
+                        </div>
+                     </div>
+                      {/* Delete Flag */}
+                      <div className="form-group checkbox-group">
+                         <label htmlFor="delete-report-flag">
+                             <input type="checkbox" id="delete-report-flag" checked={deleteReportFlag} onChange={handleReportDeleteFlagChange} />
+                             {' '} Delete Existing Report for this Month First
+                         </label>
+                     </div>
+                      {/* Submit Button */}
+                     <button type="submit" className="toggle-form-button" disabled={loadingReportProcess}>
+                         {loadingReportProcess ? 'Processing Report...' : 'Process Report'}
+                     </button>
+                      {/* Report Processing Messages */}
+                     {successReportMessage && <div className="message success-message" style={{marginTop: '15px'}}>{successReportMessage}</div>}
+                     {errorReportMessage && <div className="message error-message" style={{marginTop: '15px'}}>{errorReportMessage}</div>}
+                 </form>
+            </div>
+            {/* --- End Section 3 --- */}
+
+
+            {/* Section 4: Review Summary Section */}
             <div className="dashboard-box full-width">
                 <h2>Review Summary ({summarySource})</h2>
                 {loadingSummary && <Loading />}
@@ -240,28 +430,15 @@ const AdminTasks: React.FC = () => {
                              {/* Total Count Display */}
                              <div style={{ textAlign: 'center', flexShrink: 0 }}>
                                  <h4>Total Items Checked</h4>
-                                 <p style={{ fontSize: '2.5em', fontWeight: 'bold', margin: 0, color: '#333' }}>
-                                     {totalReviewCount}
-                                 </p>
+                                 <p style={{ fontSize: '2.5em', fontWeight: 'bold', margin: 0, color: '#333' }}> {totalReviewCount} </p>
                              </div>
-                             {/* Pie Chart for Counts (Enlarged Container & Pie) */}
-                             <div style={{ width: '450px', height: '280px' }}> {/* Increased Size */}
+                             {/* Pie Chart for Counts */}
+                             <div style={{ width: '450px', height: '280px' }}>
                                 {reviewCountChartData.length > 0 ? (
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
-                                            <Pie
-                                                data={reviewCountChartData}
-                                                cx="50%" cy="50%"
-                                                outerRadius={110} // Increased Radius
-                                                fill="#8884d8"
-                                                dataKey="value"
-                                                nameKey="name"
-                                                labelLine={false}
-                                                label={renderReviewCountLabel}
-                                            >
-                                                {reviewCountChartData.map((entry, index) => (
-                                                    <Cell key={`cell-review-${index}`} fill={REVIEW_STATUS_COLORS[entry.name] || '#8884d8'} />
-                                                ))}
+                                            <Pie data={reviewCountChartData} cx="50%" cy="50%" outerRadius={110} fill="#8884d8" dataKey="value" nameKey="name" labelLine={false} label={renderReviewCountLabel} >
+                                                {reviewCountChartData.map((entry, index) => ( <Cell key={`cell-review-${index}`} fill={REVIEW_STATUS_COLORS[entry.name] || '#8884d8'} /> ))}
                                             </Pie>
                                             <Tooltip />
                                             <Legend layout="vertical" align="right" verticalAlign="middle"/>
@@ -272,26 +449,23 @@ const AdminTasks: React.FC = () => {
                         </div>
                         {/* End Count Visualization */}
 
-
                         {/* Display Lists and Selected Item */}
                         <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-                            {/* Column for Needs Review List */}
+                            {/* Needs Review List */}
                             <div style={{ flex: 1, minWidth: '300px' }}>
                                 <h3>Needs Review ({reviewSummary.counts.needs_review_true ?? 0} items / Last 10 shown)</h3>
                                 <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #ccc', borderRadius: '4px', padding: '5px' }}>
                                     {reviewSummary.recent_needs_review.length > 0 ? ( reviewSummary.recent_needs_review.map((item: FeedbackDocument, index: number) => (<div key={`nr-${index}-${item.date || index}`} onClick={() => setSelectedReview(item)} style={{ padding: '8px', borderBottom: '1px dashed #eee', cursor: 'pointer', backgroundColor: selectedReview === item ? '#e0f7fa' : 'transparent', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.feedback_full_text}> {new Date(item.date).toLocaleDateString()} - {item.user_id?.substring(0, 20)}... - {item.feedback_full_text.substring(0, 30)}... </div>)) ) : (<p>None found</p>)}
                                 </div>
                             </div>
-
-                            {/* Column for Doesn't Need Review List */}
+                            {/* Doesn't Need Review List */}
                              <div style={{ flex: 1, minWidth: '300px' }}>
                                 <h3>Doesn't Need Review ({reviewSummary.counts.needs_review_false ?? 0} items / Last 10 shown)</h3>
                                  <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #ccc', borderRadius: '4px', padding: '5px' }}>
                                     {reviewSummary.recent_does_not_need_review.length > 0 ? ( reviewSummary.recent_does_not_need_review.map((item: FeedbackDocument, index: number) => (<div key={`dnr-${index}-${item.date || index}`} onClick={() => setSelectedReview(item)} style={{ padding: '8px', borderBottom: '1px dashed #eee', cursor: 'pointer', backgroundColor: selectedReview === item ? '#e0f7fa' : 'transparent', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.feedback_full_text}> {new Date(item.date).toLocaleDateString()} - {item.user_id?.substring(0, 20)}... - {item.feedback_full_text.substring(0, 30)}... </div>)) ) : (<p>None found</p>)}
                                 </div>
                             </div>
-
-                             {/* Column for Selected Review Details */}
+                             {/* Selected Review Details */}
                              <div style={{ flex: 2, minWidth: '300px', border: '1px solid #eee', borderRadius: '4px', padding: '15px', backgroundColor: '#f9f9f9' }}>
                                 <h3>Selected Review Details</h3>
                                 {selectedReview ? ( <div> <p><strong>Date:</strong> {selectedReview.date ? new Date(selectedReview.date).toLocaleString() : 'N/A'}</p> <p><strong>User ID:</strong> {selectedReview.user_id ?? 'N/A'}</p> <p><strong>Source:</strong> {selectedReview.source ?? 'N/A'}</p> <p><strong>Sentiment:</strong> {selectedReview.sentiment ?? 'N/A'}</p> <p><strong>Classification:</strong> {selectedReview.classification ?? 'N/A'}</p> <p><strong>Needs Review:</strong> {selectedReview.needs_review ? 'Yes' : 'No'}</p> <p><strong>Summary:</strong> {selectedReview.feedback_summary ?? 'N/A'}</p> <hr style={{margin: '10px 0'}}/> <p><strong>Full Text:</strong></p> <p style={{ whiteSpace: 'pre-wrap', maxHeight: '250px', overflowY: 'auto', border: '1px solid #ddd', padding: '10px', backgroundColor: 'white', fontSize: '0.9em', lineHeight: '1.4' }}> {selectedReview.feedback_full_text ?? 'N/A'} </p> </div> ) : ( <p>Click on a review from the lists to see details.</p> )}
@@ -299,7 +473,7 @@ const AdminTasks: React.FC = () => {
                         </div>
                     </div>
                 )}
-                 {/* Message if no summary data loaded */}
+                {/* Message if no summary data loaded */}
                 {!reviewSummary && !loadingSummary && !errorSummary && ( <p>No review summary data available.</p> )}
             </div>
             {/* --- End Review Summary Section --- */}

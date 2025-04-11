@@ -113,3 +113,42 @@ def cliente_misterio(content, year, month):
     except Exception as e:
         print(f"An error occurred: {e}")
         return []
+
+def qualtrics_provdoria(content):
+    try:
+        # Read the Excel file into a DataFrame
+        df = pd.read_excel(BytesIO(content))
+        
+        # Select and rename relevant columns
+        df = df[['Survey Metadata - End Date (+00:00 GMT)', 'ID_SOLICITACAO_EXT', 'COD_ORIGEM_SOLICITACAO', 'ASSUNTOS_CONCATENADOS', 'Magic_Wand']]
+        df = df.rename(columns={
+            "Survey Metadata - End Date (+00:00 GMT)": "date", 
+            "ID_SOLICITACAO_EXT": "id_source", 
+            "COD_ORIGEM_SOLICITACAO": "source", 
+            "ASSUNTOS_CONCATENADOS": "crm_classification",
+            "Magic_Wand": "feedback"
+        })
+
+        df['date'] = df['date'].dt.strftime('%Y-%m-%d').apply(parse_date)
+        df = df[df['feedback'].notna() & (df['feedback'] != '')]
+        df = df[df['crm_classification'].str.startswith('Reclamação>', na=False)]
+        df['source_qualtrics']='provedoria'
+
+        # Function to process the feedback column
+        def process_feedback(feedback):
+            if isinstance(feedback, str) and '>' in feedback:
+                # Remove text before the first '>' (inclusive)
+                feedback = feedback.split('>', 1)[1]
+                # Check if the text after the last '>' is equal to 'š' and remove it if true
+                if feedback.endswith('>š'):
+                    feedback = feedback.rsplit('>', 1)[0]
+            return feedback
+
+        # Apply the processing function to the 'feedback' column
+        df['crm_classification'] = df['crm_classification'].apply(process_feedback)
+
+        return df["date"].max(), df["date"].min(), df.to_dict(orient="records")
+    
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return []

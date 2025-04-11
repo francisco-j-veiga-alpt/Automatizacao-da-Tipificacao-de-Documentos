@@ -1,4 +1,5 @@
 # src/conn_utils/mongo_conn.py
+
 from pymongo import MongoClient, DESCENDING
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Dict, Optional, Any # Added Optional and Any
@@ -69,7 +70,7 @@ class FeedbackQuestionnaire(BaseModel):
     source: str = Field(description="The origin or platform from which the questionnaire feedback was collected (e.g., 'Qualtrics', 'SurveyMonkey').")
     crm_classification: str = Field(description="The classification assigned to the original case/ticket in the CRM system that this questionnaire feedback relates to.")
     feedback: str = Field(description="The verbatim text of the customer's answer to the open-ended question in the questionnaire, specifically 'O que podera a MEO fazer para melhorar o atendimento?'.")
-
+    source_qualtrics: str = Field(description="") # TODO: chage later to source_questionnaire
 
 class FeedbackQuestionnaireSentiment(FeedbackQuestionnaire):
     # Corrected: Changed str to Optional[str]
@@ -623,3 +624,4 @@ def get_review_summary(collection, date_sort_field: str = "date") -> Dict[str, A
     except Exception as e:
         print(f"Error getting review summary from collection '{collection.name}': {e}")
         raise Exception(f"Error getting review summary: {e}")
+    

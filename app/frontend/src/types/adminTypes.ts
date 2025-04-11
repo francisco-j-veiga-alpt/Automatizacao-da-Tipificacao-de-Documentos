@@ -51,7 +51,27 @@ export interface ProcessPortalDaQueixaParams {
     delete_feedback: boolean;
   }
   
-  // Interface for the expected success response
-  export interface ProcessPortalDaQueixaResponse {
-    num_inserted_ids: number;
-  }
+// Interface for the expected success response
+export interface ProcessPortalDaQueixaResponse {
+  num_inserted_ids: number;
+}
+
+export interface QualtricsUploadResponse {
+  message: string;
+  num_inserted_records: number;
+  // inserted_ids_sample?: string[]; // <<< REMOVED this field
+  deleted_count?: number; // Keep optional deleted_count field
+}
+
+
+export interface ProcessReportParams {
+  year: number;
+  month: number;
+  delete_report: boolean;
+}
+
+export interface ProcessReportResponse {
+  // Assuming the backend returns {"inserted_id": "ok"} based on previous code snippets
+  inserted_id: string; // Could be "ok" or an actual ID depending on backend implementation
+  // Add other fields if the response includes more info
+}

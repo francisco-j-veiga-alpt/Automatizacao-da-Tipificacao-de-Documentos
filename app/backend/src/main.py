@@ -1,17 +1,18 @@
 import calendar
 import json
 import os
-from fastapi import FastAPI, APIRouter, HTTPException, Path, Query, status
+from fastapi import FastAPI, APIRouter, File, Form, HTTPException, Path, Query, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Optional, Union, Any
 
 from dateutil.relativedelta import relativedelta
-from src.llm_utils.models import feedback_classifier_generic, feedback_report, process_feedback_generic, process_report
-from src.conn_utils.mongo_conn import connect_to_collection, get_data_by_year_month, get_max_timestamp, get_review_summary, insert_data, delete_data_between_dates, InputProcessBase,\
+from src.utils.utils import qualtrics_provdoria
+from src.llm_utils.models import feedback_classifier_generic, feedback_report, feedback_sentiment_analyzer, process_feedback_generic, process_feedback_sentiment, process_report
+from src.conn_utils.mongo_conn import FeedbackQuestionnaire, ListFeedbackQuestionnaire, ListFeedbackQuestionnaireSentiment, connect_to_collection, get_data_by_year_month, get_max_timestamp, get_review_summary, insert_data, delete_data_between_dates, InputProcessBase,\
     InputProcessPortalDaQueixa, get_classifications_as_string, retrieve_grouped_sentiment_counts, InputReport
 from src.utils.utils_portal_da_queixa import get_portal_da_queixa_feedback
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 
 db_host = os.environ.get("MONGO_HOST")
 db_user = os.environ.get("MONGO_PRINCIPAL_USER")
@@ -306,6 +307,145 @@ async def get_review_summary_api( # Renamed function
         print(f"Error getting review summary for {collection_name}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get review summary: {type(e).__name__}")
     finally:
+        if client:
+            client.close()
+
+
+
+@feedback_router.post("/upload/qualtrics_provedoria", status_code=status.HTTP_201_CREATED)
+async def upload_qualtrics_provedoria_file(
+    file: UploadFile = File(..., description="Excel file (.xlsx, .xls) containing Qualtrics Provedoria feedback."),
+    delete_existing_data: bool = Form(False, description="If true, deletes existing data INCLUSIVE of the min and max dates found in the file before inserting.")
+):
+    """
+    Uploads a Qualtrics Provedoria Excel file, processes it using the utility function,
+    analyzes sentiment using LLM, and stores results in the 'qualtrics_feedback' collection.
+    Optionally deletes data within the date range found in the file before insertion.
+    """
+    client = None
+    target_collection_name = "qualtrics_feedback" # Define target collection
+
+    try:
+        # --- File Validation ---
+        if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file type. Only XLS/XLSX files are allowed.")
+
+        content = await file.read()
+        if not content:
+             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
+
+        # --- Call Utility Function for Excel Processing ---
+        try:
+            # Now captures min_date and max_date returned by the function
+            max_date, min_date, processed_records = qualtrics_provdoria(content)
+
+            if not isinstance(processed_records, list):
+                 raise ValueError("Processing function did not return expected data structure.")
+             # Check if dates were returned correctly (basic check)
+            valid_dates = isinstance(min_date, (datetime, date)) and isinstance(max_date, (datetime, date))
+            if not valid_dates:
+                 raise ValueError(f"Warning: Invalid min_date ({type(min_date)}) or max_date ({type(max_date)}).")
+
+        except Exception as e:
+             print(f"Error calling qualtrics_provdoria: {e}")
+             # Use 422 as the file content caused the processing error
+             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Error processing file content: {e}")
+
+        if not processed_records:
+            # Handle empty list returned by the function
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No valid feedback records found or processing failed (check file content and format).")
+        # --- End Excel Processing Call ---
+
+
+        # --- Prepare Data for Sentiment Analysis ---
+        try:
+             # Validate records against Pydantic model
+             # Make sure FeedbackQuestionnaire aligns with dict structure in processed_records
+             feedback_list = [FeedbackQuestionnaire(**record) for record in processed_records]
+             feedback_pydantic_list = ListFeedbackQuestionnaire(list=feedback_list)
+        except Exception as pydantic_error:
+             print(f"Data validation error after processing: {pydantic_error}")
+             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Error validating processed data structure: {pydantic_error}")
+        # --------------------------------------
+
+
+        # --- Perform Sentiment Analysis ---
+        try:
+             chain = feedback_sentiment_analyzer() # Get the sentiment analysis chain
+             # Process in batches (e.g., 10)
+             output_with_sentiment: ListFeedbackQuestionnaireSentiment = process_feedback_sentiment(chain, feedback_pydantic_list, 10)
+             # Extract the list of dictionaries with sentiment included
+             records_to_insert = output_with_sentiment.model_dump()["list"]
+        except Exception as llm_error:
+             print(f"LLM Sentiment Analysis Error: {llm_error}")
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error during sentiment analysis: {llm_error}")
+        # -------------------------------
+
+
+        # --- Database Operations ---
+        # Ensure db_feedback and uri_feedback are accessible here
+        db, collection, client = connect_to_collection(uri_feedback, db_feedback, target_collection_name)
+
+        # Optional: Delete existing data using INCLUSIVE min/max dates from the file
+        # by adjusting dates passed to the EXCLUSIVE delete_data_between_dates function
+        deleted_count=0
+        if delete_existing_data:
+            # --- ADJUSTED Date Calculation for INCLUSIVE Deletion ---
+            # Ensure start is datetime at the beginning of the day
+            if isinstance(min_date, date) and not isinstance(min_date, datetime):
+                start_dt_inclusive = datetime.combine(min_date, time.min) # 00:00:00 on min_date
+            else:
+                start_dt_inclusive = min_date
+
+            # Ensure end is datetime at the beginning of the *next* day
+            if isinstance(max_date, date) and not isinstance(max_date, datetime):
+                 end_dt_exclusive_next_day = datetime.combine(max_date, time.min) + timedelta(days=1) # 00:00:00 on day AFTER max_date
+            else:
+                 # Assume max_date is datetime, get its date part, add 1 day
+                 end_dt_exclusive_next_day = datetime.combine(max_date.date(), time.min) + timedelta(days=1)
+
+            # Pass dates adjusted for the EXCLUSIVE nature of delete_data_between_dates
+            # Pass slightly BEFORE min_date for $gt start_date (to include min_date 00:00:00)
+            start_dt_for_delete = start_dt_inclusive - timedelta(days=1)
+            # Pass start of the day AFTER max_date for $lt end_date (to include all of max_date)
+            end_dt_for_delete = end_dt_exclusive_next_day
+            # --- END ADJUSTED Date Calculation ---
+
+            try:
+                 # Call the UNCHANGED delete_data_between_dates function
+                 deleted_count = delete_data_between_dates(collection, start_dt_for_delete, end_dt_for_delete, "date")
+                 print(f"Deleted {deleted_count} existing records >= {start_dt_inclusive} and < {end_dt_exclusive_next_day} from {target_collection_name}") # Log reflects effective range
+            except Exception as del_err:
+                 print(f"Error deleting existing data: {del_err}")
+                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete existing data: {del_err}")
+
+
+        # Insert new data
+        if records_to_insert:
+            insert_result = insert_data(collection, records_to_insert)
+            num_inserted = len(insert_result) if insert_result else 0
+            # Use jsonable_encoder if insert_result contains ObjectIds, otherwise format simply
+            min_date_str = min_date.isoformat() if isinstance(min_date, (datetime, date)) else "N/A"
+            max_date_str = max_date.isoformat() if isinstance(max_date, (datetime, date)) else "N/A"
+            return {
+                "message": f"File processed successfully. Data range found: {min_date_str} to {max_date_str}.",
+                "num_inserted_records": num_inserted,
+                "deleted_count": deleted_count
+            }
+        else:
+            # This case might indicate an issue with sentiment analysis returning nothing
+            return {"message": "No processed records with sentiment to insert.", "num_inserted_records": 0}
+        # -------------------------
+
+    except HTTPException as http_exc:
+         # Re-raise deliberate HTTP exceptions
+         raise http_exc
+    except Exception as e:
+        # General error handling
+        print(f"Error during file upload processing: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {type(e).__name__}")
+    finally:
+        # Ensure client is closed if it was opened
         if client:
             client.close()
 

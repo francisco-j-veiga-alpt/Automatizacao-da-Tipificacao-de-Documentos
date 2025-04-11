@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { SentimentSummaryResponse } from '../types/summaryTypes';
 import { FeedbackReportData } from '../types/reportTypes';
-import { ProcessPortalDaQueixaParams, ProcessPortalDaQueixaResponse, ReviewSummaryResponse } from '../types/adminTypes';
+import { ProcessPortalDaQueixaParams, ProcessPortalDaQueixaResponse, ProcessReportResponse, QualtricsUploadResponse, ReviewSummaryResponse } from '../types/adminTypes';
 
 // Fetch dashboard data for the last N months
 export const fetchDashboardData = async (numLastMonths: number) => {
@@ -60,22 +60,22 @@ export interface ProcessReportParams {
   delete_report: boolean;
 }
 
-export const processReport = async (params: ProcessReportParams, source: string) => {
-  try {
-    const response = await axios.post(
-      `http://localhost:8000/feedback/${source}/process-report`,
-      {
-        year: params.year,
-        month: params.month,
-        delete_report: params.delete_report,
-      }
-    );
-    return response.data; // Should return { inserted_id: "ok" }
-  } catch (error) {
-    console.error('Error processing report:', error);
-    throw error;
-  }
-};
+// export const processReport = async (params: ProcessReportParams, source: string) => {
+//   try {
+//     const response = await axios.post(
+//       `http://localhost:8000/feedback/${source}/process-report`,
+//       {
+//         year: params.year,
+//         month: params.month,
+//         delete_report: params.delete_report,
+//       }
+//     );
+//     return response.data; // Should return { inserted_id: "ok" }
+//   } catch (error) {
+//     console.error('Error processing report:', error);
+//     throw error;
+//   }
+// };
 
 
 
@@ -287,3 +287,70 @@ export const fetchReviewSummary = async (
       }
   }
 };
+
+export const uploadQualtricsFile = async (
+  file: File,
+  deleteExistingData: boolean
+): Promise<QualtricsUploadResponse> => { // <<< Ensure this uses the updated interface
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('delete_existing_data', String(deleteExistingData));
+
+  try {
+      console.log("Uploading Qualtrics File with delete flag:", deleteExistingData);
+      const response = await axios.post(
+          `http://localhost:8000/feedback/upload/qualtrics_provedoria`,
+          formData
+          // Headers are typically set automatically for FormData
+      );
+      console.log("Upload Response:", response.data);
+      // Return type is now QualtricsUploadResponse, which includes optional deleted_count
+      return response.data;
+  } catch (error) {
+      // Error handling remains the same
+      console.error('Error uploading Qualtrics file:', error);
+      if (axios.isAxiosError(error) && error.response) {
+         console.error("API Error Response:", error.response.data);
+         throw new Error(`API Error (${error.response.status}): ${error.response.data?.detail || error.message}`);
+      } else if (error instanceof Error) {
+         throw new Error(`File upload failed: ${error.message}`);
+      } else {
+         throw new Error('File upload failed due to an unknown error');
+      }
+  }
+};
+// 
+
+
+// --- Ensure this function exists ---
+export const processReport = async (
+  params: ProcessReportParams, // Body parameters (year, month, delete_report)
+  sourceFeed: string,          // Path parameter 1
+  sourceDept: string,          // Path parameter 2
+  reportDest: string           // Path parameter 3
+): Promise<ProcessReportResponse> => {
+try {
+  // Construct the URL with the path parameters
+  const apiUrl = `http://localhost:8000/feedback/process-report/${encodeURIComponent(sourceFeed)}/${encodeURIComponent(sourceDept)}/${encodeURIComponent(reportDest)}`;
+  console.log(`API Request: POST ${apiUrl}`, params);
+
+  const response = await axios.post(
+    apiUrl, // Use the constructed URL
+    params  // Send params directly as JSON body
+  );
+  console.log(`Process Report Response for ${sourceFeed}/${sourceDept} -> ${reportDest}:`, response.data);
+  // Assuming backend returns { inserted_id: "ok" }
+  return response.data;
+} catch (error) {
+  console.error(`Error processing report for ${sourceFeed}/${sourceDept} -> ${reportDest}:`, error);
+   if (axios.isAxiosError(error) && error.response) {
+     console.error("API Error Response:", error.response.data);
+     throw new Error(`API Error (${error.response.status}): ${error.response.data?.detail || error.message}`);
+  } else if (error instanceof Error) {
+     throw new Error(`Failed to process report: ${error.message}`);
+  } else {
+     throw new Error(`Failed to process report due to an unknown error`);
+  }
+}
+};
+// --- End processReport function ---
