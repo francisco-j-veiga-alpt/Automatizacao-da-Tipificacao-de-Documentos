@@ -174,4 +174,4 @@ cython_debug/
 # OTHER in PROJ
 qualtrics_files/
 provedoria/
-app/backend/Untitled-1.ipynb
+app/backend/*.ipynb
