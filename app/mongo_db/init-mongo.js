@@ -1,3 +1,4 @@
+// /app/mongo_db/init-mongo.js
 const dbName = process.env.MONGO_INITDB_DATABASE;
 const collection_pdq = process.env.MONGO_COLLECTION_PORTAL_DA_QUEIXA;
 const collection_pdq_report = process.env.MONGO_COLLECTION_PORTAL_DA_QUEIXA_REPORTS;
