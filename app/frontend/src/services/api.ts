@@ -8,7 +8,7 @@ import { ProcessPortalDaQueixaParams, ProcessPortalDaQueixaResponse, ProcessRepo
 // Fetch dashboard data for the last N months
 export const fetchDashboardData = async (numLastMonths: number) => {
   try {
-    const response = await axios.get(`http://localhost:8000/feedback/portal-da-queixa/summary?num_last_months=${numLastMonths}`);
+    const response = await axios.get(`/api/feedback/portal-da-queixa/summary?num_last_months=${numLastMonths}`);
     return response.data[0]; // Adjust based on your API's response structure
   } catch (error) {
     console.error('Error fetching dashboard data:', error);
@@ -19,7 +19,7 @@ export const fetchDashboardData = async (numLastMonths: number) => {
 // Fetch available timestamps
 export const fetchAvailableTimestamps = async (source: string) => {
   try {
-    const response = await axios.get(`http://localhost:8000/feedback/${source}/list-timestamp`);
+    const response = await axios.get(`/api/feedback/${source}/list-timestamp`);
     return response.data;
   } catch (error) {
     console.error('Error fetching timestamps:', error);
@@ -30,7 +30,7 @@ export const fetchAvailableTimestamps = async (source: string) => {
 // Fetch report data for a specific year and month
 export const fetchReportData = async (source:string, year: string, month: string) => {
   try {
-    const response = await axios.get(`http://localhost:8000/feedback/${source}/report?year=${year}&month=${month}`);
+    const response = await axios.get(`/api/feedback/${source}/report?year=${year}&month=${month}`);
     return response.data;
   } catch (error) {
     console.error('Error fetching report:', error);
@@ -48,7 +48,7 @@ export interface ProcessFeedbackParams {
 
 export const processFeedback = async (params: ProcessFeedbackParams) => {
   try {
-    const response = await axios.post('http://localhost:8000/feedback/portal-da-queixa/process', params);
+    const response = await axios.post('/api/feedback/portal-da-queixa/process', params);
     return response.data; // Should return { num_inserted_ids: number }
   } catch (error) {
     console.error('Error processing feedback:', error);
@@ -65,7 +65,7 @@ export interface ProcessReportParams {
 // export const processReport = async (params: ProcessReportParams, source: string) => {
 //   try {
 //     const response = await axios.post(
-//       `http://localhost:8000/feedback/${source}/process-report`,
+//       `/api/feedback/${source}/process-report`,
 //       {
 //         year: params.year,
 //         month: params.month,
@@ -95,7 +95,7 @@ export const uploadFileToApi = async (
   formData.append('delete_report', String(deleteReport)); // Add delete_report to form data
 
   try {
-    await axios.post(`http://localhost:8000/feedback/${source}/upload`, formData, {
+    await axios.post(`/api/feedback/${source}/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   } catch (error) {
@@ -144,8 +144,8 @@ export const fetchSentimentSummary = async (
 
   try {
     const response = await axios.get(
-      // Ensure your backend API base URL is correct (e.g., http://localhost:8000)
-      `http://localhost:8000/feedback/summary/${collectionName}`, // Using relative path assumes proxy or same origin
+      // Ensure your backend API base URL is correct (e.g., /api)
+      `/api/feedback/summary/${collectionName}`, // Using relative path assumes proxy or same origin
       { params }
     );
     // Log the raw response data
@@ -181,8 +181,8 @@ export const fetchGeneratedFeedbackReport = async (
     console.log(`API Request: GET /feedback/report/${reportSource}/${sourceDept}`, params.toString());
 
     const response = await axios.get(
-      // Ensure your backend API base URL is correct (e.g., http://localhost:8000)
-      `http://localhost:8000/feedback/report/${reportSource}/${sourceDept}`, // Using relative path assumes proxy or same origin
+      // Ensure your backend API base URL is correct (e.g., /api)
+      `/api/feedback/report/${reportSource}/${sourceDept}`, // Using relative path assumes proxy or same origin
       { params }
     );
 
@@ -217,7 +217,7 @@ export const fetchGeneratedFeedbackReport = async (
 
 export const fetchLatestTimestamp = async (source: string): Promise<string> => {
   try {
-    const response = await axios.get(`http://localhost:8000/feedback/latest-timestamp/${source}`); // Relative path
+    const response = await axios.get(`/api/feedback/latest-timestamp/${source}`); // Relative path
     // Assuming backend returns date string directly or needs parsing
     // The provided backend code returns it directly
     return response.data;
@@ -244,7 +244,7 @@ export const processSourceFeedback = async (
 try {
   // Use the generic endpoint with the source in the path
   const response = await axios.post(
-    `http://localhost:8000/feedback/process/${source}`, // <<< Use generic path with source variable
+    `/api/feedback/process/${source}`, // <<< Use generic path with source variable
     params
   );
   console.log(`Process ${source} Response:`, response.data);
@@ -268,7 +268,7 @@ export const fetchReviewSummary = async (
 ): Promise<ReviewSummaryResponse> => {
   try {
       // Path based on backend endpoint definition
-      const url = `http://localhost:8000/feedback/summary/needs-review/${collectionName}`;
+      const url = `/api/feedback/summary/needs-review/${collectionName}`;
       console.log(`API Request: GET ${url}`);
 
       const response = await axios.get(url);
@@ -301,7 +301,7 @@ export const uploadQualtricsFile = async (
   try {
       console.log("Uploading Qualtrics File with delete flag:", deleteExistingData);
       const response = await axios.post(
-          `http://localhost:8000/feedback/upload/qualtrics_provedoria`,
+          `/api/feedback/upload/qualtrics_provedoria`,
           formData
           // Headers are typically set automatically for FormData
       );
@@ -333,7 +333,7 @@ export const processReport = async (
 ): Promise<ProcessReportResponse> => {
 try {
   // Construct the URL with the path parameters
-  const apiUrl = `http://localhost:8000/feedback/process-report/${encodeURIComponent(sourceFeed)}/${encodeURIComponent(sourceDept)}/${encodeURIComponent(reportDest)}`;
+  const apiUrl = `/api/feedback/process-report/${encodeURIComponent(sourceFeed)}/${encodeURIComponent(sourceDept)}/${encodeURIComponent(reportDest)}`;
   console.log(`API Request: POST ${apiUrl}`, params);
 
   const response = await axios.post(

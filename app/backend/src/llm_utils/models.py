@@ -185,6 +185,9 @@ def process_feedback_generic(chain, feedback_list: ListFeedback, classifications
     processed_feedback_list = []
     total_feedbacks = len(feedback_list.list)
 
+    if total_feedbacks < 1 or classifications=="":
+        raise ValueError("Process feedback invalid parameters error!")
+
     # Create a set of valid classifications for efficient lookup
     valid_classifications_set: Set[str] = set(classifications.strip().split('\n'))
     if not valid_classifications_set or (len(valid_classifications_set) == 1 and '' in valid_classifications_set):
@@ -416,6 +419,9 @@ def process_feedback_sentiment(chain, feedback_list: ListFeedbackQuestionnaire, 
     validated_output_items = [] # List to hold validated FeedbackQuestionnaireOutput objects
     total_feedbacks = len(feedback_list.list)
 
+    if total_feedbacks < 1:
+        raise ValueError("Process feedback sentiment invalid parameters error!")
+
 
     for i in range(0, total_feedbacks, batch_size):
         batch_input_items = feedback_list.list[i:min(i + batch_size, total_feedbacks)]
@@ -586,6 +592,8 @@ def process_report(chain, data_str):
     """
     Invokes the LLM chain to process the feedback data string.
     """
+    if data_str=="":
+        raise ValueError("Process report invalid parameters error!")
     try:
         # Update type hint to use the renamed Pydantic model
         output: FeedbackReportOutputEN = chain.invoke({"data_str": data_str})

@@ -182,6 +182,9 @@ async def process_report_api(
     source_dept: str = Path(..., title="Feedbacks collection in mongodb"),
     report_dest: str = Path(..., title="Feedbacks collection in mongodb")
     ):
+
+    print(source_feed, source_dept, report_dest)
+
     try:
         today = date.today()
         if request_data.year > today.year:
@@ -195,6 +198,8 @@ async def process_report_api(
         feed_month = get_data_by_year_month(collection=collection, date_field="date", month=request_data.month, year=request_data.year, project={}, filter_dict={"sentiment": {"$nin": [None, "null"]}, "source_qualtrics": source_dept})
         feed_month = ["Feedback: " + fb["feedback"] for fb in feed_month]
         feed_month = "\n---\n".join(feed_month)
+
+        print("feed_month\n", json.dumps(feed_month))
         
         chain = feedback_report()
         output = process_report(chain, data_str=json.dumps(feed_month))
@@ -211,10 +216,11 @@ async def process_report_api(
         del_after = id_date + relativedelta(months=1)
 
         if request_data.delete_report:
-            res_del = delete_data_between_dates(db[report_dest], del_before, del_after, "data")
-            print("Deleted number of rows: ", res_del)
+            #res_del = delete_data_between_dates(db[report_dest], del_before, del_after, "data")
+            #print("Deleted number of rows: ", res_del)
+            pass
 
-        insert_result = insert_data(db[report_dest], output)
+        #insert_result = insert_data(db[report_dest], output)
 
         return {"inserted_id": "ok"}
 
