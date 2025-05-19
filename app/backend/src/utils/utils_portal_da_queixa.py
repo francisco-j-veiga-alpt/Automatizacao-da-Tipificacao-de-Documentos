@@ -15,7 +15,7 @@ def get_portal_da_queixa_feedback(params: InputProcessPortalDaQueixa):
 
         for page_url in pages_url:
             try:
-                response = requests.get(page_url, verify=False, timeout=30, proxies = { "https" : os.environ.get("PROXY")})
+                response = requests.get(page_url, verify=False, timeout=30, proxies = {"http": os.environ.get("http_proxy"),"https": os.environ.get("https_proxy")})
             except Exception as e:
                 e.add_note(f"Error request call: {e}")
                 raise
@@ -39,7 +39,7 @@ def get_portal_da_queixa_feedback(params: InputProcessPortalDaQueixa):
         feedback_data = []
 
         for url, complaint_date in feedback_meta:
-            response = requests.get(url, verify=False, timeout=30, proxies = { "https" : os.environ.get("PROXY")})
+            response = requests.get(url, verify=False, timeout=30, proxies = {"http": os.environ.get("http_proxy"),"https": os.environ.get("https_proxy")})
             response.raise_for_status()
             soup_parser = BeautifulSoup(response.text, 'html.parser')
             page_complaints_url = soup_parser.find_all(class_='card card--user')

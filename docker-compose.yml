@@ -45,9 +45,9 @@ services:
     networks:
       - app-network
     volumes:
-      - /home/fveiga/feedback/mongo_db/mongo_data:/data/db
-      - /home/fveiga/feedback/mongo_db/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js
-      - /home/fveiga/feedback/mongo_db/configdb:/data/configdb
+      - /app/mongo_db/mongo_data:/data/db
+      - /app/mongo_db/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js
+      - /app/mongo_db/configdb:/data/configdb
     environment:
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
