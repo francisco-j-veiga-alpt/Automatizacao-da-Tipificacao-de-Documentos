@@ -216,11 +216,10 @@ async def process_report_api(
         del_after = id_date + relativedelta(months=1)
 
         if request_data.delete_report:
-            #res_del = delete_data_between_dates(db[report_dest], del_before, del_after, "data")
-            #print("Deleted number of rows: ", res_del)
-            pass
+            res_del = delete_data_between_dates(db[report_dest], del_before, del_after, "data")
+            print("Deleted number of rows: ", res_del)
 
-        #insert_result = insert_data(db[report_dest], output)
+        insert_result = insert_data(db[report_dest], output)
 
         return {"inserted_id": "ok"}
 
