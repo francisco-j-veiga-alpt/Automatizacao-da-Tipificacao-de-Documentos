@@ -18,9 +18,9 @@ db.createCollection(collection_pdq); // Create the specified collection
 
 db.createCollection(collection_pdq_report);
 
-db.createCollection(collection_qual_on);
+// db.createCollection(collection_qual_on);
 
-db.createCollection(collection_qual_on_report);
+// db.createCollection(collection_qual_on_report);
 
 // Create a new user with read and write permissions
 db.createUser({

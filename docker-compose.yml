@@ -60,15 +60,15 @@ services:
       - MONGO_PRINCIPAL_PASSWORD=${MONGO_PRINCIPAL_PASSWORD}
       - MONGO_COLLECTION_CLASSIFICATIONS=${MONGO_COLLECTION_CLASSIFICATIONS}
       - MONGO_COLLECTION_CUSTOMER_FEEDBACK=${MONGO_COLLECTION_CUSTOMER_FEEDBACK}
-  ollama:
-    build: ./app/ollama/
-    ports:
-      - "11434:11434"
-    networks:
-      - app-network
-    volumes:
-      - ./app/ollama/.ollama:/root/.ollama
-      #- ./app/ollama/certificates:/usr/local/share/ca-certificates/
+  # ollama:
+  #   build: ./app/ollama/
+  #   ports:
+  #     - "11434:11434"
+  #   networks:
+  #     - app-network
+  #   volumes:
+  #     - ./app/ollama/.ollama:/root/.ollama
+  #     #- ./app/ollama/certificates:/usr/local/share/ca-certificates/
 
   frontend:
     build:
